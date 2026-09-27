@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FILE_CHUNK_SIZE,
   BUFFER_HIGH_WATERMARK,
@@ -41,7 +41,14 @@ function yieldToMain() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-export function useFileTransfer({ getDataChannel }) {
+/**
+ * FIX: `dataChannelOpen` (from useWebRTC) is now accepted so this hook
+ * knows the moment the connection comes back and can automatically
+ * flush anything that was queued while it was down — the user should
+ * never have to reselect a file just because the connection blipped
+ * while the OS file picker was open, or while a transfer was mid-flight.
+ */
+export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   const [outgoing, setOutgoing] = useState([]);
   const [incoming, setIncoming] = useState([]);
 
@@ -56,17 +63,60 @@ export function useFileTransfer({ getDataChannel }) {
   const recvSpeedTrackers = useRef(new Map());
   const retryFileRef = useRef(new Map());
 
+  /* ------------------------------------------------------------
+     FIX: files waiting for a DataChannel to (re)open. Each entry
+     is { file, meta } — meta.fileId stays the same across retries
+     so the UI row is reused instead of duplicated.
+  ------------------------------------------------------------ */
+  const pendingFilesRef = useRef([]);
+  const flushingRef = useRef(false);
+
+  /* ============================================================
+     SEND ONE FILE'S OFFER, WAIT FOR ACCEPT, THEN STREAM IT
+     (extracted out of sendFiles so both sendFiles and the
+     auto-resume flow below can reuse the exact same logic)
+  ============================================================ */
+  const offerAndSend = async (dc, file, meta) => {
+    dc.send(
+      JSON.stringify({
+        type: 'file-offer',
+        files: [meta],
+      })
+    );
+
+    const result = await new Promise((resolve) => {
+      acceptResolversRef.current.set(meta.fileId, resolve);
+
+      setTimeout(() => {
+        if (acceptResolversRef.current.has(meta.fileId)) {
+          acceptResolversRef.current.delete(meta.fileId);
+          resolve('timeout');
+        }
+      }, 300000);
+    });
+
+    if (result !== 'accepted') {
+      setOutgoing((prev) =>
+        prev.map((f) =>
+          f.fileId === meta.fileId
+            ? {
+                ...f,
+                status: result === 'cancelled' ? 'cancelled' : 'rejected',
+              }
+            : f
+        )
+      );
+      return;
+    }
+
+    await sendSingleFile(dc, file, meta);
+  };
+
   /* ============================================================
      SEND — sequential, streamed (no full-file arrayBuffer)
   ============================================================ */
   const sendFiles = useCallback(
     async (files) => {
-      const dc = getDataChannel();
-      if (!dc || dc.readyState !== 'open') {
-        console.warn('[send] DataChannel not open');
-        return;
-      }
-
       const valid = [];
       for (const file of files) {
         const err = validateFile(file);
@@ -84,6 +134,11 @@ export function useFileTransfer({ getDataChannel }) {
           mimeType: file.type || 'application/octet-stream',
         };
 
+        retryFileRef.current.set(meta.fileId, file);
+
+        const dc = getDataChannel();
+        const isOpen = Boolean(dc) && dc.readyState === 'open';
+
         setOutgoing((prev) => [
           ...prev,
           {
@@ -91,50 +146,84 @@ export function useFileTransfer({ getDataChannel }) {
             progress: 0,
             bytesSent: 0,
             speed: 0,
-            status: 'waiting',
+            // FIX: 'queued' instead of silently dropping the file
+            // when the channel isn't open yet (e.g. still reconnecting
+            // right after the mobile file picker closed).
+            status: isOpen ? 'waiting' : 'queued',
             direction: 'out',
           },
         ]);
 
-        retryFileRef.current.set(meta.fileId, file);
-
-        dc.send(
-          JSON.stringify({
-            type: 'file-offer',
-            files: [meta],
-          })
-        );
-
-        const result = await new Promise((resolve) => {
-          acceptResolversRef.current.set(meta.fileId, resolve);
-
-          setTimeout(() => {
-            if (acceptResolversRef.current.has(meta.fileId)) {
-              acceptResolversRef.current.delete(meta.fileId);
-              resolve('timeout');
-            }
-          }, 300000);
-        });
-
-        if (result !== 'accepted') {
-          setOutgoing((prev) =>
-            prev.map((f) =>
-              f.fileId === meta.fileId
-                ? {
-                    ...f,
-                    status: result === 'cancelled' ? 'cancelled' : 'rejected',
-                  }
-                : f
-            )
+        if (!isOpen) {
+          console.warn(
+            '[send] DataChannel not open yet — queueing file until connection is (re)established'
           );
+          pendingFilesRef.current.push({ file, meta });
           continue;
         }
 
-        await sendSingleFile(dc, file, meta);
+        await offerAndSend(dc, file, meta);
       }
     },
     [getDataChannel]
   );
+
+  /* ============================================================
+     FIX: FLUSH QUEUED FILES
+     Called automatically whenever the DataChannel (re)opens.
+     Sends everything that was queued while disconnected, in order.
+     If the connection drops again partway through, whatever is
+     left just goes back into the queue for the next reconnect.
+  ============================================================ */
+  const flushPendingFiles = useCallback(async () => {
+    if (flushingRef.current) return;
+    if (pendingFilesRef.current.length === 0) return;
+
+    flushingRef.current = true;
+
+    const queue = pendingFilesRef.current;
+    pendingFilesRef.current = [];
+
+    try {
+      for (let i = 0; i < queue.length; i++) {
+        const { file, meta } = queue[i];
+        const dc = getDataChannel();
+
+        if (!dc || dc.readyState !== 'open') {
+          // Dropped again before we got here — keep this one and
+          // everything after it queued for the next reconnect.
+          pendingFilesRef.current.push(...queue.slice(i));
+          return;
+        }
+
+        console.log(
+          '[send] Connection back, resuming queued file:',
+          meta.name
+        );
+
+        setOutgoing((prev) =>
+          prev.map((f) =>
+            f.fileId === meta.fileId ? { ...f, status: 'waiting' } : f
+          )
+        );
+
+        await offerAndSend(dc, file, meta);
+      }
+    } finally {
+      flushingRef.current = false;
+    }
+  }, [getDataChannel]);
+
+  /* ------------------------------------------------------------
+     FIX: whenever the DataChannel flips to open (fresh connection
+     OR a reconnect after the file picker / a network blip), try to
+     send anything that got queued while it was down.
+  ------------------------------------------------------------ */
+  useEffect(() => {
+    if (dataChannelOpen) {
+      flushPendingFiles();
+    }
+  }, [dataChannelOpen, flushPendingFiles]);
 
   /**
    * Stream a file in small slices — never load the whole file into RAM.
@@ -168,11 +257,22 @@ export function useFileTransfer({ getDataChannel }) {
       }
 
       if (dc.readyState !== 'open') {
+        // FIX: connection dropped mid-transfer — re-queue this file
+        // (from the start) instead of just marking it failed forever.
+        console.warn(
+          '[send] DataChannel dropped mid-transfer, re-queueing:',
+          meta.name
+        );
+
         setOutgoing((prev) =>
           prev.map((f) =>
-            f.fileId === meta.fileId ? { ...f, status: 'failed' } : f
+            f.fileId === meta.fileId
+              ? { ...f, status: 'queued', bytesSent: 0, speed: 0 }
+              : f
           )
         );
+
+        pendingFilesRef.current.push({ file, meta });
         sendSpeedTrackers.current.delete(meta.fileId);
         return;
       }
@@ -249,17 +349,33 @@ export function useFileTransfer({ getDataChannel }) {
         }
 
         if (msg.type === 'file-offer') {
-          setIncoming((prev) => [
-            ...prev,
-            ...msg.files.map((f) => ({
-              ...f,
-              progress: 0,
-              bytesReceived: 0,
-              speed: 0,
-              status: 'pending',
-              direction: 'in',
-            })),
-          ]);
+          // FIX: if this fileId already exists (e.g. the sender is
+          // re-offering the same file after a reconnect), replace
+          // the stale/failed row instead of adding a duplicate one.
+          setIncoming((prev) => {
+            const next = [...prev];
+
+            for (const f of msg.files) {
+              const idx = next.findIndex((x) => x.fileId === f.fileId);
+
+              const entry = {
+                ...f,
+                progress: 0,
+                bytesReceived: 0,
+                speed: 0,
+                status: 'pending',
+                direction: 'in',
+              };
+
+              if (idx >= 0) {
+                next[idx] = entry;
+              } else {
+                next.push(entry);
+              }
+            }
+
+            return next;
+          });
           return;
         }
 
@@ -430,6 +546,13 @@ export function useFileTransfer({ getDataChannel }) {
       cancelledRef.current.add(fileId);
       sendSpeedTrackers.current.delete(fileId);
 
+      // FIX: also drop it from the pending queue if it hasn't been
+      // (re)sent yet, otherwise a cancelled file could still get
+      // auto-resumed on the next reconnect.
+      pendingFilesRef.current = pendingFilesRef.current.filter(
+        (item) => item.meta.fileId !== fileId
+      );
+
       setOutgoing((prev) =>
         prev.map((f) =>
           f.fileId === fileId ? { ...f, status: 'cancelled' } : f
@@ -532,7 +655,7 @@ export function useFileTransfer({ getDataChannel }) {
       } else {
         setOutgoing((prev) => {
           const file = prev.find((f) => f.fileId === fileId);
-          if (file && ['waiting', 'transferring'].includes(file.status)) {
+          if (file && ['waiting', 'transferring', 'queued'].includes(file.status)) {
             cancelOutgoing(fileId);
           }
           return prev.filter((f) => f.fileId !== fileId);
@@ -553,6 +676,7 @@ export function useFileTransfer({ getDataChannel }) {
     sendSpeedTrackers.current.clear();
     recvSpeedTrackers.current.clear();
     retryFileRef.current.clear();
+    pendingFilesRef.current = [];
   }, []);
 
   const clearCompleted = useCallback(() => {
@@ -568,13 +692,40 @@ export function useFileTransfer({ getDataChannel }) {
     );
   }, []);
 
+  /* ============================================================
+     FIX: instead of just marking in-flight transfers as permanently
+     'failed' when the peer disconnects, re-queue outgoing ones (we
+     still have the original File object via retryFileRef) so they
+     resume automatically the moment the connection comes back.
+     Incoming transfers can't be resumed this way (we don't have the
+     bytes the sender hasn't sent yet), so those still get marked
+     'failed' — the sender re-offering after reconnect will refresh
+     that row back to 'pending' (see the 'file-offer' handler above).
+  ============================================================ */
   const markPeerDisconnected = useCallback(() => {
     setOutgoing((prev) =>
-      prev.map((f) =>
-        ['waiting', 'transferring'].includes(f.status)
-          ? { ...f, status: 'failed' }
-          : f
-      )
+      prev.map((f) => {
+        if (['waiting', 'transferring'].includes(f.status)) {
+          const file = retryFileRef.current.get(f.fileId);
+
+          if (file) {
+            pendingFilesRef.current.push({
+              file,
+              meta: {
+                fileId: f.fileId,
+                name: f.name,
+                size: f.size,
+                mimeType: f.mimeType,
+              },
+            });
+
+            return { ...f, status: 'queued', bytesSent: 0, speed: 0 };
+          }
+
+          return { ...f, status: 'failed' };
+        }
+        return f;
+      })
     );
     setIncoming((prev) =>
       prev.map((f) =>
@@ -591,9 +742,31 @@ export function useFileTransfer({ getDataChannel }) {
     (fileId) => {
       const dc = getDataChannel();
       const file = retryFileRef.current.get(fileId);
-      if (!dc || dc.readyState !== 'open' || !file) return false;
+      if (!file) return false;
 
       cancelledRef.current.delete(fileId);
+
+      const meta = {
+        fileId,
+        name: file.name,
+        size: file.size,
+        mimeType: file.type || 'application/octet-stream',
+      };
+
+      if (!dc || dc.readyState !== 'open') {
+        // FIX: no open channel right now — queue it instead of
+        // silently failing; it will go out as soon as we reconnect.
+        setOutgoing((prev) =>
+          prev.map((f) =>
+            f.fileId === fileId
+              ? { ...f, status: 'queued', bytesSent: 0, speed: 0 }
+              : f
+          )
+        );
+        pendingFilesRef.current.push({ file, meta });
+        return true;
+      }
+
       setOutgoing((prev) =>
         prev.map((f) =>
           f.fileId === fileId
@@ -602,38 +775,7 @@ export function useFileTransfer({ getDataChannel }) {
         )
       );
 
-      const meta = {
-        fileId,
-        name: file.name,
-        size: file.size,
-        mimeType: file.type || 'application/octet-stream',
-      };
-      dc.send(JSON.stringify({ type: 'file-offer', files: [meta] }));
-
-      new Promise((resolve) => {
-        acceptResolversRef.current.set(fileId, resolve);
-        setTimeout(() => {
-          if (acceptResolversRef.current.has(fileId)) {
-            acceptResolversRef.current.delete(fileId);
-            resolve('timeout');
-          }
-        }, 300000);
-      }).then((result) => {
-        if (result !== 'accepted') {
-          setOutgoing((prev) =>
-            prev.map((f) =>
-              f.fileId === fileId
-                ? {
-                    ...f,
-                    status: result === 'cancelled' ? 'cancelled' : 'rejected',
-                  }
-                : f
-            )
-          );
-          return;
-        }
-        sendSingleFile(dc, file, meta);
-      });
+      offerAndSend(dc, file, meta);
 
       return true;
     },
