@@ -105,7 +105,22 @@ export function useWebRTC({
 
   const createPeer = useCallback(() => {
     if (pcRef.current) {
-      return pcRef.current;
+      const existingState = pcRef.current.connectionState;
+
+      // FIX: if the old peer connection is dead, reset it instead
+      // of silently returning a connection that can never work again.
+      if (
+        existingState === 'failed' ||
+        existingState === 'closed' ||
+        existingState === 'disconnected'
+      ) {
+        console.log(
+          '[WebRTC] Existing peer is dead, resetting before creating new one'
+        );
+        resetPeer();
+      } else {
+        return pcRef.current;
+      }
     }
 
     console.log('[WebRTC] Creating RTCPeerConnection');
@@ -261,7 +276,7 @@ export function useWebRTC({
     pcRef.current = pc;
 
     return pc;
-  }, [wireDataChannel]);
+  }, [wireDataChannel, resetPeer]);
 
   /* ============================================================
      HOST - CREATE OFFER
@@ -286,10 +301,28 @@ export function useWebRTC({
     }
 
     if (offerSentRef.current) {
+      // FIX: an offer was sent before, but check whether that
+      // connection is actually still alive. If it's dead (guest
+      // left / connection failed), allow a fresh offer to go out.
+      const existingState = pcRef.current?.connectionState;
+
+      const isHealthy =
+        pcRef.current &&
+        existingState !== 'failed' &&
+        existingState !== 'closed' &&
+        existingState !== 'disconnected';
+
+      if (isHealthy) {
+        console.log(
+          '[Host] Offer already sent, connection healthy'
+        );
+        return;
+      }
+
       console.log(
-        '[Host] Offer already sent'
+        '[Host] Previous connection dead, allowing new offer'
       );
-      return;
+      resetPeer();
     }
 
     offerSentRef.current = true;
@@ -336,7 +369,7 @@ export function useWebRTC({
 
       offerSentRef.current = false;
     }
-  }, [createPeer, wireDataChannel]);
+  }, [createPeer, wireDataChannel, resetPeer]);
 
   /* ============================================================
      GUEST - HANDLE OFFER
@@ -637,6 +670,45 @@ export function useWebRTC({
     roomCode,
     resetPeer,
   ]);
+
+  /* ============================================================
+     RE-OFFER WHEN A NEW PEER JOINS THE SAME ROOM
+     FIX: roomCode does not change when a guest leaves and rejoins
+     the SAME room, so the "reset when room changes" effect above
+     never fires. Without this, the host keeps a dead/closed
+     RTCPeerConnection around and never sends a fresh offer, so a
+     rejoining guest can never reconnect.
+  ============================================================ */
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const onUserJoined = () => {
+      if (roleRef.current === 'host') {
+        console.log(
+          '[WebRTC] New peer joined, (re)initiating connection'
+        );
+        startAsHost();
+      }
+    };
+
+    const onUserLeft = () => {
+      console.log(
+        '[WebRTC] Peer left the room'
+      );
+      // No action needed here: the peer connection will naturally
+      // go to 'disconnected'/'failed', and createPeer()/startAsHost()
+      // will detect that dead state and reset on the next join.
+    };
+
+    socket.on('user-joined', onUserJoined);
+    socket.on('user-left', onUserLeft);
+
+    return () => {
+      socket.off('user-joined', onUserJoined);
+      socket.off('user-left', onUserLeft);
+    };
+  }, [socket, startAsHost]);
 
   /* ============================================================
      TAB VISIBILITY
