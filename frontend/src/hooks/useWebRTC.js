@@ -6,6 +6,7 @@ export function useWebRTC({
   roomCode,
   role,
   onIncomingData,
+  rejoinNonce,
 }) {
   const pcRef = useRef(null);
   const dcRef = useRef(null);
@@ -709,6 +710,40 @@ export function useWebRTC({
       socket.off('user-left', onUserLeft);
     };
   }, [socket, startAsHost]);
+
+  /* ============================================================
+     RE-OFFER WHEN *WE* RECONNECT (e.g. mobile tab backgrounded
+     during the file picker, then came back).
+
+     FIX: When our own socket drops and reconnects, we get a new
+     socket.id. RoomContext re-registers that new socket.id with
+     the server's room (see RoomContext.jsx) and bumps rejoinNonce.
+     If we are the host, nobody else will proactively re-offer to
+     us (the 'user-joined' broadcast only reaches OTHER members,
+     not ourselves), so we must kick off a fresh offer ourselves.
+  ============================================================ */
+
+  const didMountRejoinRef = useRef(false);
+
+  useEffect(() => {
+    if (!didMountRejoinRef.current) {
+      // Skip the initial render — rejoinNonce starts at 0 and this
+      // effect firing on mount does not mean a reconnect happened.
+      didMountRejoinRef.current = true;
+      return;
+    }
+
+    if (rejoinNonce === undefined) {
+      return;
+    }
+
+    if (roleRef.current === 'host') {
+      console.log(
+        '[WebRTC] Local socket reconnected & re-registered, sending fresh offer'
+      );
+      startAsHost();
+    }
+  }, [rejoinNonce, startAsHost]);
 
   /* ============================================================
      TAB VISIBILITY
