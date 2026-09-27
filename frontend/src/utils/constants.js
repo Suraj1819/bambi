@@ -19,48 +19,74 @@ export const BUFFER_LOW_WATERMARK =
    WEBRTC ICE SERVERS
 ============================================================ */
 
+// export const ICE_SERVERS = {
+//   iceServers: [
+//     // Google STUN
+//     {
+//       urls: 'stun:stun.l.google.com:19302',
+//     },
+
+//     // Metered / OpenRelay STUN
+//     {
+//       urls: 'stun:openrelay.metered.ca:80',
+//     },
+
+//     // TURN UDP
+//     {
+//       urls: 'turn:openrelay.metered.ca:80',
+//       username: 'openrelayproject',
+//       credential: 'openrelayproject',
+//     },
+
+//     // TURN TCP
+//     {
+//       urls: 'turn:openrelay.metered.ca:80?transport=tcp',
+//       username: 'openrelayproject',
+//       credential: 'openrelayproject',
+//     },
+
+//     // TURN over 443
+//     {
+//       urls: 'turn:openrelay.metered.ca:443',
+//       username: 'openrelayproject',
+//       credential: 'openrelayproject',
+//     },
+
+//     // TURN TCP over 443
+//     {
+//       urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+//       username: 'openrelayproject',
+//       credential: 'openrelayproject',
+//     },
+//   ],
+// };
 export const ICE_SERVERS = {
   iceServers: [
-    // Google STUN
     {
-      urls: 'stun:stun.l.google.com:19302',
+      urls: 'stun:stun.relay.metered.ca:80',
     },
-
-    // Metered / OpenRelay STUN
     {
-      urls: 'stun:openrelay.metered.ca:80',
+      urls: 'turn:global.relay.metered.ca:80',
+      username: '54a4158fb1749e46af9cc405',
+      credential: 'Zd0pzxYRqyQZM9Tr',
     },
-
-    // TURN UDP
     {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+      username: '54a4158fb1749e46af9cc405',
+      credential: 'Zd0pzxYRqyQZM9Tr',
     },
-
-    // TURN TCP
     {
-      urls: 'turn:openrelay.metered.ca:80?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      urls: 'turn:global.relay.metered.ca:443',
+      username: '54a4158fb1749e46af9cc405',
+      credential: 'Zd0pzxYRqyQZM9Tr',
     },
-
-    // TURN over 443
     {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-
-    // TURN TCP over 443
-    {
-      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
+      urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+      username: '54a4158fb1749e46af9cc405',
+      credential: 'Zd0pzxYRqyQZM9Tr',
     },
   ],
 };
-
 /* ============================================================
    BACKEND URL
 ============================================================ */
