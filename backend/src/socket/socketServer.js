@@ -134,10 +134,7 @@ export function initSocketServer(httpServer) {
       credentials: true,
     },
 
-    transports: [
-      'websocket',
-      'polling',
-    ],
+    transports: ['polling', 'websocket'],
   });
 
   /* ==========================================================

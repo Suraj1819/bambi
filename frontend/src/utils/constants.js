@@ -21,11 +21,42 @@ export const BUFFER_LOW_WATERMARK =
 
 export const ICE_SERVERS = {
   iceServers: [
+    // Google STUN
     {
       urls: 'stun:stun.l.google.com:19302',
     },
+
+    // Metered / OpenRelay STUN
     {
-      urls: 'stun:stun1.l.google.com:19302',
+      urls: 'stun:openrelay.metered.ca:80',
+    },
+
+    // TURN UDP
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+
+    // TURN TCP
+    {
+      urls: 'turn:openrelay.metered.ca:80?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+
+    // TURN over 443
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
+
+    // TURN TCP over 443
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
     },
   ],
 };
@@ -35,9 +66,7 @@ export const ICE_SERVERS = {
 ============================================================ */
 
 export const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL ||
-  'https://bambibackend.onrender.com';
+  import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
 export const API_URL =
-  import.meta.env.VITE_API_URL ||
-  'https://bambibackend.onrender.com';
+  import.meta.env.VITE_API_URL ||'http://localhost:5000';

@@ -83,10 +83,10 @@ export function RoomProvider({ children }) {
   ============================================================ */
   useEffect(() => {
     const s = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      autoConnect: true,
-      reconnection: true,
-    });
+  withCredentials: true,
+  autoConnect: true,
+  reconnection: true,
+  }); 
 
     socketRef.current = s;
     setSocket(s);
