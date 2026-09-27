@@ -30,7 +30,8 @@ import {
   Share2,
   RotateCcw,
   Clock,
-  AlertTriangle,
+  QrCode,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { useRoom, getHostToken, saveHostToken, clearHostToken, addRecentRoom } from '../context/RoomContext';
 import { useWebRTC } from '../hooks/useWebRTC';
@@ -65,6 +66,14 @@ function getFileTypeIcon(mimeType) {
 }
 
 const LARGE_FILE_WARNING_BYTES = 500 * 1024 * 1024;
+
+function formatSpeed(bytesPerSec) {
+  if (!bytesPerSec || bytesPerSec <= 0) return null;
+  const k = 1024;
+  const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  const i = Math.floor(Math.log(bytesPerSec) / Math.log(k));
+  return `${parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
 
 function playCompletionSound() {
   try {
@@ -119,6 +128,8 @@ export default function RoomPage() {
   const [roomError, setRoomError] = useState('');
   const [expiresAt, setExpiresAt] = useState(null);
   const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const qrRef = useRef(null);
   const joinedRef = useRef(false);
   const disconnectingRef = useRef(false);
   const hostTokenRef = useRef(getHostToken(roomCode));
@@ -449,6 +460,22 @@ export default function RoomPage() {
     [connectionState, waitingForLabel, transfer, requestNotifyPermission]
   );
 
+  useEffect(() => {
+    if (!showQr) return;
+    const onOutside = (e) => {
+      if (qrRef.current && !qrRef.current.contains(e.target)) setShowQr(false);
+    };
+    const onEscape = (e) => {
+      if (e.key === 'Escape') setShowQr(false);
+    };
+    document.addEventListener('mousedown', onOutside);
+    document.addEventListener('keydown', onEscape);
+    return () => {
+      document.removeEventListener('mousedown', onOutside);
+      document.removeEventListener('keydown', onEscape);
+    };
+  }, [showQr]);
+
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -459,6 +486,22 @@ export default function RoomPage() {
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
   }, [handleFilesSelected]);
+
+  // Let the receiver know a file is on the way as soon as the offer arrives,
+  // rather than only once the transfer completes.
+  const notifiedOffersRef = useRef(new Set());
+  useEffect(() => {
+    transfer.incoming.forEach((f) => {
+      if (f.status === 'pending' && !notifiedOffersRef.current.has(f.fileId)) {
+        notifiedOffersRef.current.add(f.fileId);
+        const notify = toast.info || toast.success;
+        notify(
+          'Incoming file',
+          `${peer?.deviceName || 'Peer'} wants to send "${f.name}" (${formatBytes(f.size)})`
+        );
+      }
+    });
+  }, [transfer.incoming, peer]);
 
   const handleDisconnect = useCallback(
     (e) => {
@@ -479,6 +522,14 @@ export default function RoomPage() {
     },
     [socket, roomCode, webrtc, setRoomCode, setRole, setUsers, navigate]
   );
+
+  const totalActiveSpeed = useMemo(() => {
+    const active = [...transfer.outgoing, ...transfer.incoming].filter(
+      (f) => f.status === 'transferring' || f.status === 'receiving'
+    );
+    return active.reduce((sum, f) => sum + (f.speed || 0), 0);
+  }, [transfer.outgoing, transfer.incoming]);
+  const totalActiveSpeedLabel = formatSpeed(totalActiveSpeed);
 
   if (joining && socket) {
     return (
@@ -515,18 +566,18 @@ export default function RoomPage() {
 
   return (
     <div className="min-h-screen bg-[#FBFAFF] transition-colors dark:bg-surface">
-      <div className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-3">
+      <div className="mx-auto w-full max-w-[1400px] px-3 py-6 sm:px-6 sm:py-10 lg:px-10">
+        <div className="flex flex-wrap items-start justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <p
-                className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
+                className="text-[9px] font-bold uppercase text-slate-400 dark:text-slate-500 sm:text-[10px]"
                 style={{ letterSpacing: '0.24em' }}
               >
                 Transmission Room
               </p>
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-bold uppercase text-white transition-all duration-300 ${stateInfo.badgeClass}`}
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[9px] font-bold uppercase text-white transition-all duration-300 sm:px-3 sm:text-[10px] ${stateInfo.badgeClass}`}
                 style={{ letterSpacing: '0.1em' }}
               >
                 {connectionState === 'connected' && (
@@ -540,24 +591,24 @@ export default function RoomPage() {
               </span>
             </div>
 
-            <h1 className="mt-2 font-heading text-[26px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[32px] lg:text-[40px]">
+            <h1 className="mt-2 font-heading text-[22px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[32px] lg:text-[40px]">
               Room{' '}
               <span className="font-mono tracking-[0.05em] text-purple-600 dark:text-purple-400">
                 {roomCode}
               </span>
             </h1>
 
-            <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-slate-500 dark:text-slate-400">
+            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[14px]">
               Share files directly. The signaling server only helps these two browsers find each
               other.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
             <button
               type="button"
               onClick={handleCopyCode}
-              className="inline-flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-4 py-2.5 text-[13px] font-semibold text-purple-700 transition-colors hover:bg-purple-100 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20"
+              className="inline-flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-[12px] font-semibold text-purple-700 transition-colors hover:bg-purple-100 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20 sm:px-4 sm:py-2.5 sm:text-[13px]"
               title="Copy room code"
             >
               <Copy className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -567,17 +618,82 @@ export default function RoomPage() {
             <button
               type="button"
               onClick={handleCopyInvite}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 sm:px-4 sm:py-2.5 sm:text-[13px]"
             >
               <Copy className="h-3.5 w-3.5" strokeWidth={2.2} />
-              Copy invite
+              <span className="hidden xs:inline sm:inline">Copy invite</span>
+              <span className="xs:hidden sm:hidden">Invite</span>
             </button>
+
+            <div ref={qrRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setShowQr((v) => !v)}
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold transition-colors sm:px-4 sm:py-2.5 sm:text-[13px] ${
+                  showQr
+                    ? 'border-purple-300 bg-purple-100 text-purple-700 dark:border-purple-400/30 dark:bg-purple-500/20 dark:text-purple-300'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10'
+                }`}
+                title="Show QR code to join"
+              >
+                <QrCode className="h-3.5 w-3.5" strokeWidth={2.2} />
+                QR
+              </button>
+
+              {showQr && (
+                <div className="absolute right-0 top-full z-30 mt-2 w-[calc(100vw-1.5rem)] max-w-[240px] rounded-2xl border border-purple-200 bg-white p-4 shadow-xl shadow-purple-900/10 dark:border-purple-500/20 dark:bg-surface-card">
+                  <div className="flex items-center justify-between gap-2">
+                    <p
+                      className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
+                      style={{ letterSpacing: '0.16em' }}
+                    >
+                      Scan to join
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowQr(false)}
+                      aria-label="Close QR code"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-white/10 dark:hover:text-slate-200"
+                    >
+                      <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex justify-center rounded-xl border border-slate-100 bg-white p-3 dark:border-surface-border">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                        inviteUrl
+                      )}`}
+                      alt="Scan to join this room"
+                      width={168}
+                      height={168}
+                      className="h-[168px] w-[168px]"
+                    />
+                  </div>
+
+                  <p className="mt-3 text-center text-[12px] text-slate-500 dark:text-slate-400">
+                    Room{' '}
+                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">
+                      {roomCode}
+                    </span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCopyInvite}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-surface-border dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                  >
+                    <Copy className="h-3 w-3" strokeWidth={2.2} />
+                    Copy link instead
+                  </button>
+                </div>
+              )}
+            </div>
 
             {typeof navigator !== 'undefined' && navigator.share && (
               <button
                 type="button"
                 onClick={handleShareInvite}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 sm:hidden"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 sm:hidden"
               >
                 <Share2 className="h-3.5 w-3.5" strokeWidth={2.2} />
                 Share
@@ -585,7 +701,7 @@ export default function RoomPage() {
             )}
 
             <span
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[13px] font-semibold ${
+              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold sm:py-2.5 sm:text-[13px] ${
                 peerVisible
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400'
                   : 'border-slate-200 bg-white text-slate-600 dark:border-surface-border dark:bg-white/5 dark:text-slate-300'
@@ -594,14 +710,14 @@ export default function RoomPage() {
               <span
                 className={`h-1.5 w-1.5 rounded-full ${peerVisible ? 'bg-emerald-500' : 'bg-slate-400'}`}
               />
-              {peerVisible ? '2' : '1'}/2 devices
+              {peerVisible ? '2' : '1'}/2
             </span>
 
             {role === 'host' && (
               <button
                 type="button"
                 onClick={handleToggleLock}
-                className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2.5 text-[13px] font-semibold transition-colors ${
+                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold transition-colors sm:px-4 sm:py-2.5 sm:text-[13px] ${
                   locked
                     ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10'
@@ -613,7 +729,7 @@ export default function RoomPage() {
                 ) : (
                   <Unlock className="h-3.5 w-3.5" strokeWidth={2.4} />
                 )}
-                {locked ? 'Locked' : 'Lock room'}
+                <span className="hidden sm:inline">{locked ? 'Locked' : 'Lock room'}</span>
               </button>
             )}
 
@@ -621,7 +737,7 @@ export default function RoomPage() {
               type="button"
               data-disconnect-btn="true"
               onClick={handleDisconnect}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-[13px] font-semibold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 sm:px-4 sm:py-2.5 sm:text-[13px]"
               title="Leave — the room stays open and you can rejoin"
             >
               <LogOut className="h-3.5 w-3.5" strokeWidth={2.4} />
@@ -632,11 +748,11 @@ export default function RoomPage() {
               <button
                 type="button"
                 onClick={handleEndRoom}
-                className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-4 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 sm:px-4 sm:py-2.5 sm:text-[13px]"
                 title="End the room for everyone"
               >
                 <Power className="h-3.5 w-3.5" strokeWidth={2.4} />
-                End room
+                <span className="hidden sm:inline">End room</span>
               </button>
             )}
           </div>
@@ -649,9 +765,9 @@ export default function RoomPage() {
           </div>
         )}
 
-        <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-[400px_1fr]">
-          <div className="flex flex-col gap-5">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-surface-border dark:bg-surface-card">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:mt-8 sm:gap-5 md:grid-cols-[340px_1fr] lg:grid-cols-[400px_1fr]">
+          <div className="flex flex-col gap-4 sm:gap-5">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-surface-border dark:bg-surface-card sm:p-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p
@@ -660,7 +776,7 @@ export default function RoomPage() {
                   >
                     Peer Topology
                   </p>
-                  <h3 className="mt-1 font-heading text-[20px] font-bold tracking-tight text-slate-900 dark:text-white">
+                  <h3 className="mt-1 font-heading text-[18px] font-bold tracking-tight text-slate-900 dark:text-white sm:text-[20px]">
                     Connection map
                   </h3>
                 </div>
@@ -671,7 +787,80 @@ export default function RoomPage() {
                 )}
               </div>
 
-              <div className="relative mt-5 h-[240px] overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/70 to-purple-50/40 dark:border-surface-border dark:from-white/[0.02] dark:to-purple-500/5">
+              {/* Compact mobile connection strip — avoids the absolute-positioned
+                  canvas overlapping on narrow screens */}
+              <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50/70 to-purple-50/40 p-3 dark:border-surface-border dark:from-white/[0.02] dark:to-purple-500/5 sm:hidden">
+                <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 shadow-md shadow-purple-600/30">
+                    <YouIcon className="h-4.5 w-4.5 text-white" strokeWidth={2} />
+                  </div>
+                  <span className="max-w-full truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                    You{role === 'host' ? ' (Host)' : ''}
+                  </span>
+                </div>
+
+                <div className="flex shrink-0 flex-col items-center gap-1">
+                  {connected ? (
+                    <ShieldCheck className="h-4 w-4 text-emerald-500" strokeWidth={2.2} />
+                  ) : (
+                    <ArrowRightLeft
+                      className={`h-4 w-4 ${
+                        connectionState === 'establishing'
+                          ? 'animate-pulse text-amber-500'
+                          : 'text-slate-300 dark:text-slate-600'
+                      }`}
+                      strokeWidth={2.2}
+                    />
+                  )}
+                  <span className="text-[9px] font-bold uppercase text-slate-400 dark:text-slate-500">
+                    {connected ? 'Live' : 'P2P'}
+                  </span>
+                </div>
+
+                <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
+                  <div
+                    className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
+                      peerVisible
+                        ? connected
+                          ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10'
+                          : 'border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10'
+                        : 'border-slate-200 bg-white dark:border-surface-border dark:bg-white/5'
+                    }`}
+                  >
+                    {peerReveal === 'fetching' && !peerVisible ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-amber-500" strokeWidth={2} />
+                    ) : (
+                      <PeerIcon
+                        className={`h-4 w-4 ${
+                          peerVisible
+                            ? connected
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-amber-600 dark:text-amber-400'
+                            : 'text-slate-300 dark:text-slate-600'
+                        }`}
+                        strokeWidth={2}
+                      />
+                    )}
+                  </div>
+                  <span className="max-w-full truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                    {peerVisible ? peer.deviceName || 'Peer' : mapFooterLabel || 'Waiting'}
+                  </span>
+                </div>
+
+                {role === 'host' && peerVisible && (
+                  <button
+                    type="button"
+                    onClick={() => handleKickPeer(peer.socketId)}
+                    title="Remove this device from the room"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20"
+                  >
+                    <UserX className="h-3.5 w-3.5" strokeWidth={2.4} />
+                  </button>
+                )}
+              </div>
+
+              {/* Full connection map — sm and up */}
+              <div className="relative mt-5 hidden h-[240px] overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/70 to-purple-50/40 dark:border-surface-border dark:from-white/[0.02] dark:to-purple-500/5 sm:block">
                 <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-purple-200/30 dark:bg-purple-400/10" />
                 <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-purple-200/30 dark:bg-purple-400/10" />
                 <div className="absolute left-1/2 top-1/2 h-[60px] w-[60px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-purple-200/60 dark:border-purple-400/20" />
@@ -769,10 +958,10 @@ export default function RoomPage() {
               </div>
 
               <div className="mt-5 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3 dark:border-surface-border">
-                  <span className="text-[13px] text-slate-500 dark:text-slate-400">Data channel</span>
+                <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-100 pb-3 dark:border-surface-border">
+                  <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Data channel</span>
                   <span
-                    className={`text-[13px] font-semibold ${
+                    className={`text-[12px] font-semibold sm:text-[13px] ${
                       connectionState === 'connected'
                         ? 'text-emerald-600 dark:text-emerald-400'
                         : connectionState === 'establishing'
@@ -787,15 +976,15 @@ export default function RoomPage() {
                       : 'Waiting'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] text-slate-500 dark:text-slate-400">Room created</span>
-                  <span className="font-mono text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-1">
+                  <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Room created</span>
+                  <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[13px]">
                     {expiresAt ? formatLocalDateTime(expiresAt - 30 * 60 * 1000) : '--'}
                   </span>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] text-slate-500 dark:text-slate-400">Expires at</span>
-                  <span className="font-mono text-[13px] font-semibold text-slate-700 dark:text-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-1">
+                  <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Expires at</span>
+                  <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[13px]">
                     {expiresAt ? formatLocalDateTime(expiresAt) : '--'}
                   </span>
                 </div>
@@ -803,7 +992,7 @@ export default function RoomPage() {
             </div>
 
             <div
-              className={`rounded-2xl border p-5 transition-all duration-300 ${
+              className={`rounded-2xl border p-4 transition-all duration-300 sm:p-5 ${
                 connectionState === 'connected'
                   ? 'border-emerald-100 bg-emerald-50/60 dark:border-emerald-500/20 dark:bg-emerald-500/10'
                   : connectionState === 'establishing'
@@ -830,14 +1019,14 @@ export default function RoomPage() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-bold text-slate-900 dark:text-white">
+                  <p className="text-[13px] font-bold text-slate-900 dark:text-white sm:text-[14px]">
                     {connectionState === 'connected'
                       ? 'Peer connected'
                       : connectionState === 'establishing'
                       ? 'Establishing secure channel'
                       : 'Waiting for the other device?'}
                   </p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-slate-600 dark:text-slate-400">
+                  <p className="mt-1 text-[12px] leading-relaxed text-slate-600 dark:text-slate-400 sm:text-[13px]">
                     {connectionState === 'connected' ? (
                       <>
                         Encrypted DataChannel is open with{' '}
@@ -854,7 +1043,7 @@ export default function RoomPage() {
                         <span className="font-mono font-semibold text-slate-900 dark:text-white">
                           {roomCode}
                         </span>{' '}
-                        or copy the invite link. Only one receiver can join.
+                        or share the invite link / QR code. Only one receiver can join.
                       </>
                     )}
                   </p>
@@ -863,7 +1052,7 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 sm:gap-5">
             <div
               onClick={() =>
                 connectionState === 'connected' && document.getElementById('file-input')?.click()
@@ -882,7 +1071,7 @@ export default function RoomPage() {
                 if (connectionState !== 'connected') return;
                 handleFilesSelected(e.dataTransfer?.files);
               }}
-              className={`relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-300 sm:p-14 ${
+              className={`relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed p-6 text-center transition-all duration-300 sm:p-10 lg:p-14 ${
                 isDragging
                   ? 'scale-[1.01] border-purple-500 bg-purple-100/60 dark:border-purple-400 dark:bg-purple-500/15'
                   : connectionState === 'connected'
@@ -899,7 +1088,7 @@ export default function RoomPage() {
               )}
 
               <div
-                className={`relative flex h-14 w-14 items-center justify-center rounded-2xl transition-colors duration-300 ${
+                className={`relative flex h-12 w-12 items-center justify-center rounded-2xl transition-colors duration-300 sm:h-14 sm:w-14 ${
                   connectionState === 'connected'
                     ? 'bg-purple-100 dark:bg-purple-500/15'
                     : connectionState === 'establishing'
@@ -908,10 +1097,10 @@ export default function RoomPage() {
                 }`}
               >
                 {connectionState === 'establishing' ? (
-                  <Loader2 className="h-6 w-6 animate-spin text-amber-600 dark:text-amber-400" />
+                  <Loader2 className="h-5 w-5 animate-spin text-amber-600 dark:text-amber-400 sm:h-6 sm:w-6" />
                 ) : (
                   <CloudUpload
-                    className={`h-7 w-7 ${
+                    className={`h-6 w-6 sm:h-7 sm:w-7 ${
                       connectionState === 'connected'
                         ? 'text-purple-600 dark:text-purple-400'
                         : 'text-slate-400 dark:text-slate-600'
@@ -921,7 +1110,7 @@ export default function RoomPage() {
                 )}
               </div>
 
-              <p className="relative mt-4 text-[16px] font-semibold text-slate-900 dark:text-white sm:text-[18px]">
+              <p className="relative mt-3 text-[15px] font-semibold text-slate-900 dark:text-white sm:mt-4 sm:text-[18px]">
                 {connectionState === 'connected'
                   ? 'Drop files to transfer'
                   : connectionState === 'establishing'
@@ -929,7 +1118,7 @@ export default function RoomPage() {
                   : `${waitingForLabel} to connect…`}
               </p>
 
-              <p className="relative mt-1.5 max-w-md text-[13px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[14px]">
+              <p className="relative mt-1.5 max-w-md text-[12px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[14px]">
                 {connectionState === 'connected'
                   ? 'Drag and drop any file here, or choose from your device. Nothing is uploaded.'
                   : connectionState === 'establishing'
@@ -939,14 +1128,14 @@ export default function RoomPage() {
 
               {connectionState === 'connected' && (
                 <>
-                  <div className="relative mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <div className="relative mt-4 flex w-full flex-wrap items-center justify-center gap-2 sm:mt-5">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         document.getElementById('file-input')?.click();
                       }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50 active:scale-[0.98] dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:shadow-none dark:hover:bg-white/10"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50 active:scale-[0.98] dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:shadow-none dark:hover:bg-white/10 sm:px-5 sm:text-[14px]"
                     >
                       <Paperclip className="h-4 w-4" strokeWidth={2} />
                       Choose files
@@ -957,13 +1146,13 @@ export default function RoomPage() {
                         e.stopPropagation();
                         document.getElementById('folder-input')?.click();
                       }}
-                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[14px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50 active:scale-[0.98] dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:shadow-none dark:hover:bg-white/10"
+                      className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[13px] font-semibold text-slate-700 shadow-sm transition-all duration-200 hover:bg-slate-50 active:scale-[0.98] dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:shadow-none dark:hover:bg-white/10 sm:px-5 sm:text-[14px]"
                     >
                       <FileArchive className="h-4 w-4" strokeWidth={2} />
                       Choose folder
                     </button>
                   </div>
-                  <p className="relative mt-6 text-[11px] font-medium tracking-wide text-slate-400 dark:text-slate-600">
+                  <p className="relative mt-5 px-2 text-[10px] font-medium leading-relaxed tracking-wide text-slate-400 dark:text-slate-600 sm:mt-6 sm:text-[11px]">
                     16 KB CHUNKS · BACKPRESSURE ENABLED · NO SIZE LIMIT
                   </p>
                 </>
@@ -993,16 +1182,16 @@ export default function RoomPage() {
               />
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-surface-border dark:bg-surface-card">
-              <div className="flex items-start justify-between">
-                <div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-surface-border dark:bg-surface-card sm:p-6">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
                   <p
                     className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
                     style={{ letterSpacing: '0.22em' }}
                   >
                     Transfer Queue
                   </p>
-                  <h3 className="mt-1 font-heading text-[20px] font-bold tracking-tight text-slate-900 dark:text-white">
+                  <h3 className="mt-1 font-heading text-[18px] font-bold tracking-tight text-slate-900 dark:text-white sm:text-[20px]">
                     Files in this room
                   </h3>
                   {filesCount > 0 && (
@@ -1015,11 +1204,20 @@ export default function RoomPage() {
                         )
                       )}{' '}
                       total
+                      {totalActiveSpeedLabel && (
+                        <>
+                          {' '}
+                          ·{' '}
+                          <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                            {totalActiveSpeedLabel}
+                          </span>
+                        </>
+                      )}
                     </p>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-semibold text-slate-500 dark:border-surface-border dark:bg-white/5 dark:text-slate-400">
                     {filesCount} items
                   </span>
@@ -1031,7 +1229,8 @@ export default function RoomPage() {
                         className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-600 transition-all hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
                       >
                         <CheckCircle className="h-3 w-3" strokeWidth={2.4} />
-                        Clear completed
+                        <span className="hidden xs:inline">Clear completed</span>
+                        <span className="xs:hidden">Clear done</span>
                       </button>
                       <button
                         type="button"
@@ -1047,14 +1246,14 @@ export default function RoomPage() {
               </div>
 
               {filesCount === 0 ? (
-                <div className="flex flex-col items-center justify-center py-14 text-center">
+                <div className="flex flex-col items-center justify-center py-10 text-center sm:py-14">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5">
                     <FileText className="h-5 w-5 text-slate-400 dark:text-slate-500" />
                   </div>
-                  <p className="mt-4 text-[15px] font-semibold text-slate-700 dark:text-slate-200">
+                  <p className="mt-4 text-[14px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[15px]">
                     No files in the queue
                   </p>
-                  <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
+                  <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">
                     Accepted transfers will appear here.
                   </p>
                 </div>
@@ -1142,20 +1341,13 @@ function FileRow({
     (isIncoming && isReceiving) || (!isIncoming && (isWaiting || isTransferring));
   const canRetry = !isIncoming && isFailed && Boolean(onRetry);
   const cancelLabel = isIncoming ? 'Cancel receiving' : 'Cancel transfer';
+  const hasActionsRow = canDownload || canRetry || isPending || canCancel;
 
   const transferredBytes = isIncoming
     ? file.bytesReceived || 0
     : file.bytesReceived || file.bytesSent || 0;
 
   const progress = Math.min(100, file.size > 0 ? (transferredBytes / file.size) * 100 : 0);
-
-  const formatSpeed = (bytesPerSec) => {
-    if (!bytesPerSec || bytesPerSec <= 0) return null;
-    const k = 1024;
-    const sizes = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
-    const i = Math.floor(Math.log(bytesPerSec) / Math.log(k));
-    return `${parseFloat((bytesPerSec / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-  };
 
   const speedLabel = formatSpeed(file.speed);
   const isActive = isReceiving || isTransferring;
@@ -1168,7 +1360,7 @@ function FileRow({
     if (isFailed) return 'Failed';
     if (isRejected) return 'Rejected';
     if (isCancelled) return 'Cancelled';
-    if (isPending) return 'Waiting for your response';
+    if (isPending) return isIncoming ? 'Incoming — waiting for you' : 'Waiting for response';
     if (isWaiting) return 'Waiting for accept…';
     if (isActive) return `${progress.toFixed(1)}%`;
     return 'Ready';
@@ -1191,47 +1383,25 @@ function FileRow({
 
   return (
     <div
-      className={`flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 transition-all duration-200 dark:border-surface-border dark:bg-white/[0.03] sm:p-4 ${
+      className={`flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 transition-all duration-200 dark:border-surface-border dark:bg-white/[0.03] ${
         removing ? 'translate-x-4 scale-95 opacity-0' : 'translate-x-0 scale-100 opacity-100'
       }`}
     >
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-white/5">
-          <TypeIcon className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-white/5 sm:h-10 sm:w-10">
+          <TypeIcon className="h-4.5 w-4.5 text-slate-500 dark:text-slate-400 sm:h-5 sm:w-5" />
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-semibold text-slate-900 dark:text-white">
+          <p className="truncate text-[13px] font-semibold text-slate-900 dark:text-white sm:text-[14px]">
             {file.name}
           </p>
-          <div className="mt-0.5 flex items-center gap-2 text-[12px]">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] sm:text-[12px]">
             <span className="text-slate-500 dark:text-slate-400">{formatBytes(file.size)}</span>
             <span className="text-slate-300 dark:text-slate-600">·</span>
             <span className={statusColor}>{statusLabel}</span>
           </div>
         </div>
-
-        {canDownload && (
-          <button
-            type="button"
-            onClick={onDownload}
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-purple-600 px-3 text-[13px] font-semibold text-white hover:bg-purple-700"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download
-          </button>
-        )}
-
-        {canRetry && (
-          <button
-            type="button"
-            onClick={onRetry}
-            className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg bg-purple-600 px-3 text-[13px] font-semibold text-white hover:bg-purple-700"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            Retry
-          </button>
-        )}
 
         {isCompleted && !isIncoming && (
           <CheckCircle className="h-5 w-5 shrink-0 text-emerald-500" />
@@ -1247,36 +1417,64 @@ function FileRow({
         </button>
       </div>
 
-      {isPending && (
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={onReject}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-          >
-            <XCircle className="h-3.5 w-3.5" />
-            Reject
-          </button>
-          <button
-            type="button"
-            onClick={onAccept}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-purple-700"
-          >
-            <CheckCircle className="h-3.5 w-3.5" />
-            Accept
-          </button>
-        </div>
-      )}
+      {hasActionsRow && (
+        <div className="flex flex-col gap-2">
+          {isPending && (
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={onReject}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Reject
+              </button>
+              <button
+                type="button"
+                onClick={onAccept}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-purple-700"
+              >
+                <CheckCircle className="h-3.5 w-3.5" />
+                Accept
+              </button>
+            </div>
+          )}
 
-      {canCancel && (
-        <button
-          type="button"
-          onClick={onCancel}
-          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-        >
-          <XCircle className="h-3.5 w-3.5" />
-          {cancelLabel}
-        </button>
+          {(canDownload || canRetry || canCancel) && (
+            <div className="flex flex-wrap gap-2">
+              {canDownload && (
+                <button
+                  type="button"
+                  onClick={onDownload}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3 text-[13px] font-semibold text-white hover:bg-purple-700 sm:flex-none"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </button>
+              )}
+              {canRetry && (
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3 text-[13px] font-semibold text-white hover:bg-purple-700 sm:flex-none"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Retry
+                </button>
+              )}
+              {canCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-[12px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 sm:flex-none"
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  {cancelLabel}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {isActive && (
@@ -1287,11 +1485,11 @@ function FileRow({
               style={{ width: `${progress}%` }}
             />
           </div>
-          <div className="flex items-center justify-between text-[11px]">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px]">
             <span className="text-slate-500 dark:text-slate-400">
               {formatBytes(transferredBytes)} / {formatBytes(file.size)}
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {etaLabel && (
                 <span className="flex items-center gap-1 text-slate-400 dark:text-slate-500">
                   <Clock className="h-3 w-3" />
