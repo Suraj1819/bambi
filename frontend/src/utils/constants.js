@@ -60,33 +60,52 @@ export const BUFFER_LOW_WATERMARK =
 //     },
 //   ],
 // };
+// export const ICE_SERVERS = {
+//   iceServers: [
+//     {
+//       urls: 'stun:stun.relay.metered.ca:80',
+//     },
+//     {
+//       urls: 'turn:global.relay.metered.ca:80',
+//       username: '54a4158fb1749e46af9cc405',
+//       credential: 'Zd0pzxYRqyQZM9Tr',
+//     },
+//     {
+//       urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+//       username: '54a4158fb1749e46af9cc405',
+//       credential: 'Zd0pzxYRqyQZM9Tr',
+//     },
+//     {
+//       urls: 'turn:global.relay.metered.ca:443',
+//       username: '54a4158fb1749e46af9cc405',
+//       credential: 'Zd0pzxYRqyQZM9Tr',
+//     },
+//     {
+//       urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+//       username: '54a4158fb1749e46af9cc405',
+//       credential: 'Zd0pzxYRqyQZM9Tr',
+//     },
+//   ],
+// };
+
 export const ICE_SERVERS = {
   iceServers: [
     {
-      urls: 'stun:stun.relay.metered.ca:80',
+      urls: 'stun:stun.l.google.com:19302',
     },
     {
-      urls: 'turn:global.relay.metered.ca:80',
-      username: '54a4158fb1749e46af9cc405',
-      credential: 'Zd0pzxYRqyQZM9Tr',
+      urls: 'turn:free.expressturn.com:3478',
+      username: '000000002105836723',
+      credential: 'mF2klm+JllCgYEeeWHCBFc0PULY=',
     },
     {
-      urls: 'turn:global.relay.metered.ca:80?transport=tcp',
-      username: '54a4158fb1749e46af9cc405',
-      credential: 'Zd0pzxYRqyQZM9Tr',
-    },
-    {
-      urls: 'turn:global.relay.metered.ca:443',
-      username: '54a4158fb1749e46af9cc405',
-      credential: 'Zd0pzxYRqyQZM9Tr',
-    },
-    {
-      urls: 'turns:global.relay.metered.ca:443?transport=tcp',
-      username: '54a4158fb1749e46af9cc405',
-      credential: 'Zd0pzxYRqyQZM9Tr',
+      urls: 'turn:free.expressturn.com:3478?transport=tcp',
+      username: '000000002105836723',
+      credential: 'mF2klm+JllCgYEeeWHCBFc0PULY=',
     },
   ],
 };
+
 /* ============================================================
    BACKEND URL
 ============================================================ */
