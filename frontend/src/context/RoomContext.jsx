@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { io } from 'socket.io-client';
 import { SOCKET_URL } from '../utils/constants';
-import { detectDevice, detectDeviceInfo } from '../utils/fileUtils';
+import { detectDevice, detectDeviceInfo, refineDeviceInfo } from '../utils/fileUtils';
 
 const RoomContext = createContext(null);
 const RECENT_ROOMS_KEY = 'webdrop-recent-rooms';
@@ -75,8 +75,34 @@ export function RoomProvider({ children }) {
   const [users, setUsers] = useState([]);
   const [locked, setLocked] = useState(false);
   const [navLocked, setNavLocked] = useState(false);
-  const [deviceName] = useState(() => detectDevice());
-  const [deviceInfo] = useState(() => detectDeviceInfo());
+  const [deviceName, setDeviceName] = useState(() => detectDevice());
+  // FIX: deviceInfo is now mutable state (was a static useState with no
+  // setter). Chrome freezes the Android version to "10" in the sync
+  // User-Agent string on purpose (privacy), so the initial value here is
+  // only a best-effort fallback. The effect below asynchronously asks
+  // the User-Agent Client Hints API for the REAL version and corrects
+  // this state once it resolves (usually within a few milliseconds).
+  const [deviceInfo, setDeviceInfo] = useState(() => detectDeviceInfo());
+  const [deviceInfoReady, setDeviceInfoReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    refineDeviceInfo(deviceInfo).then((refined) => {
+      if (cancelled) return;
+
+      setDeviceInfo(refined);
+      setDeviceName(refined.label);
+      setDeviceInfoReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // Deliberately runs once on mount only — deviceInfo's initial value
+    // is stable (computed once via lazy useState initializer above).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ------------------------------------------------------------
      FIX: bumped whenever we successfully re-register our socket
@@ -91,6 +117,8 @@ export function RoomProvider({ children }) {
   // on mount) can see the latest roomCode/role without stale closures.
   const roomCodeRef = useRef(null);
   const roleRef = useRef(null);
+  const deviceNameRef = useRef(deviceName);
+  const deviceInfoRef = useRef(deviceInfo);
 
   useEffect(() => {
     roomCodeRef.current = roomCode;
@@ -99,6 +127,14 @@ export function RoomProvider({ children }) {
   useEffect(() => {
     roleRef.current = role;
   }, [role]);
+
+  useEffect(() => {
+    deviceNameRef.current = deviceName;
+  }, [deviceName]);
+
+  useEffect(() => {
+    deviceInfoRef.current = deviceInfo;
+  }, [deviceInfo]);
 
   /* ============================================================
      SOCKET LIFECYCLE
@@ -150,8 +186,8 @@ export function RoomProvider({ children }) {
         'join-room',
         {
           roomCode: rc,
-          deviceName,
-          deviceInfo,
+          deviceName: deviceNameRef.current,
+          deviceInfo: deviceInfoRef.current,
           hostToken: token,
         },
         (res) => {
@@ -202,7 +238,7 @@ export function RoomProvider({ children }) {
       s.off('disconnect', onDisconnect);
       s.disconnect();
     };
-  }, [deviceName, deviceInfo]);
+  }, []);
 
   /* ============================================================
      GLOBAL ROOM LISTENERS
@@ -271,6 +307,9 @@ export function RoomProvider({ children }) {
       setNavLocked,
       deviceName,
       deviceInfo,
+      // FIX: exposed so RoomPage can wait a brief moment for the real
+      // Android version before sending device info to the server.
+      deviceInfoReady,
       reset,
       rejoinNonce,
     }),
@@ -284,6 +323,7 @@ export function RoomProvider({ children }) {
       navLocked,
       deviceName,
       deviceInfo,
+      deviceInfoReady,
       reset,
       rejoinNonce,
     ]

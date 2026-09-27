@@ -80,6 +80,13 @@ export function detectDevice() {
  * Mobile browsers deliberately reduce hardware detail for privacy —
  * Apple never exposes the iPhone/iPad model, so we only show "iPhone" / "iPad"
  * plus the OS version.
+ *
+ * NOTE ON ANDROID VERSION: this SYNC function reads the classic
+ * User-Agent string, and Chrome (89+) intentionally freezes the Android
+ * version in that string to "10" for every device as a privacy measure
+ * ("User-Agent Reduction"). This is not a bug in the regex below — the
+ * real number just isn't in the string Chrome hands us. Use
+ * `refineDeviceInfo()` below to get the true version asynchronously.
  */
 export function detectDeviceInfo() {
   if (typeof navigator === 'undefined') {
@@ -161,6 +168,60 @@ export function detectDeviceInfo() {
   const label = model ? `${model} · ${browser}` : `${os} · ${browser}`;
 
   return { label, os, browser, type, model };
+}
+
+/**
+ * FIX: Chrome (89+) intentionally freezes the Android version in the
+ * classic User-Agent string to "10" for EVERY Android device — this is
+ * Google's "User-Agent Reduction" privacy policy
+ * (https://www.chromium.org/updates/ua-reduction/), not a bug in
+ * detectDeviceInfo()'s parsing. Adding Android 16, 17, 18 to the regex
+ * changes nothing because the string itself never contains the real
+ * number anymore.
+ *
+ * The ONLY way to get the REAL version is the async User-Agent Client
+ * Hints API (navigator.userAgentData.getHighEntropyValues). This
+ * resolves almost instantly since it's a local browser call (no
+ * network), so callers can safely await it briefly before showing or
+ * sending device info anywhere (e.g. before emitting 'join-room').
+ *
+ * Returns a corrected copy of `baseInfo`, or `baseInfo` unchanged if the
+ * Client Hints API isn't available (Firefox, Safari, older Chromium) or
+ * nothing needed correcting.
+ */
+export async function refineDeviceInfo(baseInfo) {
+  try {
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.userAgentData?.getHighEntropyValues
+    ) {
+      return baseInfo;
+    }
+
+    const hints = await navigator.userAgentData.getHighEntropyValues([
+      'platformVersion',
+      'model',
+    ]);
+
+    const platform = navigator.userAgentData.platform || '';
+
+    if (/android/i.test(platform) && hints.platformVersion) {
+      // On Android, Client Hints' platformVersion IS the real Android
+      // version number directly (unlike Windows, where it needs mapping
+      // via a lookup table). No mapping needed here.
+      const realOs = `Android ${hints.platformVersion}`;
+      const realModel = hints.model || baseInfo.model;
+      const label = realModel
+        ? `${realModel} · ${baseInfo.browser}`
+        : `${realOs} · ${baseInfo.browser}`;
+
+      return { ...baseInfo, os: realOs, model: realModel, label };
+    }
+
+    return baseInfo;
+  } catch {
+    return baseInfo;
+  }
 }
 
 /** Alias kept for compatibility with RoomContext */
@@ -248,6 +309,7 @@ export default {
   getFileCategory,
   detectDevice,
   detectDeviceInfo,
+  refineDeviceInfo,
   detectDeviceName,
   formatBytes,
   formatSpeed,
