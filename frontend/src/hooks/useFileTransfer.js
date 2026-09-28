@@ -312,10 +312,12 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
     }
 
     dc.send(JSON.stringify({ type: 'file-complete', fileId: meta.fileId }));
+    
+    // FIX: Ensure sender side also marks speed as 0 upon completion
     setOutgoing((prev) =>
       prev.map((f) =>
         f.fileId === meta.fileId
-          ? { ...f, status: 'completed', bytesSent: total, progress: 100 }
+          ? { ...f, status: 'completed', bytesSent: total, progress: 100, speed: 0 }
           : f
       )
     );
@@ -414,10 +416,19 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
             type: entry.meta.mimeType || 'application/octet-stream',
           });
 
+          // FIX: Ensure final state is perfectly synced.
+          // Set speed to 0 and bytesReceived to total size so UI is exactly 100% and stops showing speed.
           setIncoming((prev) =>
             prev.map((f) =>
               f.fileId === msg.fileId
-                ? { ...f, status: 'completed', blob, progress: 100 }
+                ? { 
+                    ...f, 
+                    status: 'completed', 
+                    blob, 
+                    progress: 100,
+                    bytesReceived: entry.meta.size,
+                    speed: 0 
+                  }
                 : f
             )
           );
@@ -475,9 +486,11 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
       const tracker = recvSpeedTrackers.current.get(nextFileId);
       const speed = tracker ? tracker.update(entry.received) : 0;
 
-      // Throttle receive progress UI (~8 updates/sec)
+      // FIX: Throttle receive progress UI (~8 updates/sec), 
+      // BUT always update if this is the final chunk to prevent stuck UI.
       const now = Date.now();
-      if (now - lastRecvUiUpdateRef.current > 125) {
+      const isLastChunk = entry.received >= entry.meta.size;
+      if (now - lastRecvUiUpdateRef.current > 125 || isLastChunk) {
         lastRecvUiUpdateRef.current = now;
         setIncoming((prev) =>
           prev.map((f) =>

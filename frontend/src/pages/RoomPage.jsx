@@ -531,6 +531,30 @@ export default function RoomPage() {
   }, [transfer.outgoing, transfer.incoming]);
   const totalActiveSpeedLabel = formatSpeed(totalActiveSpeed);
 
+  // Unified, priority-ordered queue: anything needing your attention or actively
+  // moving surfaces first (incoming offers included), then completed, then
+  // failed/rejected/cancelled — instead of always listing every outgoing file
+  // before any incoming one regardless of what actually needs attention.
+  const queuePriority = (status) => {
+    if (status === 'pending') return 0;
+    if (status === 'waiting' || status === 'transferring' || status === 'receiving') return 1;
+    if (status === 'completed') return 2;
+    return 3;
+  };
+  const queueItems = useMemo(() => {
+    const items = [
+      ...transfer.incoming.map((f) => ({ file: f, direction: 'in' })),
+      ...transfer.outgoing.map((f) => ({ file: f, direction: 'out' })),
+    ];
+    return items
+      .map((item, idx) => ({ item, idx }))
+      .sort((a, b) => {
+        const diff = queuePriority(a.item.file.status) - queuePriority(b.item.file.status);
+        return diff !== 0 ? diff : a.idx - b.idx;
+      })
+      .map(({ item }) => item);
+  }, [transfer.incoming, transfer.outgoing]);
+
   if (joining && socket) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#FBFAFF] dark:bg-surface">
@@ -608,7 +632,7 @@ export default function RoomPage() {
             <button
               type="button"
               onClick={handleCopyCode}
-              className="inline-flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-[12px] font-semibold text-purple-700 transition-colors hover:bg-purple-100 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20 sm:px-4 sm:py-2.5 sm:text-[13px]"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-[12px] font-semibold text-purple-700 transition-colors hover:bg-purple-100 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20 sm:px-4 sm:py-2.5 sm:text-[13px]"
               title="Copy room code"
             >
               <Copy className="h-3.5 w-3.5" strokeWidth={2.2} />
@@ -618,14 +642,14 @@ export default function RoomPage() {
             <button
               type="button"
               onClick={handleCopyInvite}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 sm:px-4 sm:py-2.5 sm:text-[13px]"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 sm:px-4 sm:py-2.5 sm:text-[13px]"
             >
               <Copy className="h-3.5 w-3.5" strokeWidth={2.2} />
               <span className="hidden xs:inline sm:inline">Copy invite</span>
               <span className="xs:hidden sm:hidden">Invite</span>
             </button>
 
-            <div ref={qrRef} className="relative">
+            <div ref={qrRef} className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setShowQr((v) => !v)}
@@ -641,8 +665,10 @@ export default function RoomPage() {
               </button>
 
               {showQr && (
-                <div className="absolute right-0 top-full z-30 mt-2 w-[calc(100vw-1.5rem)] max-w-[240px] rounded-2xl border border-purple-200 bg-white p-4 shadow-xl shadow-purple-900/10 dark:border-purple-500/20 dark:bg-surface-card">
-                  <div className="flex items-center justify-between gap-2">
+                <div className="absolute right-0 top-full z-30 mt-3 w-[min(260px,calc(100vw-2rem))] rounded-2xl border border-purple-200 bg-white p-4 shadow-xl shadow-purple-900/10 dark:border-purple-500/20 dark:bg-surface-card">
+                  <div className="absolute -top-1.5 right-4 h-3 w-3 rotate-45 border-l border-t border-purple-200 bg-white dark:border-purple-500/20 dark:bg-surface-card" />
+
+                  <div className="relative flex items-center justify-between gap-2">
                     <p
                       className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
                       style={{ letterSpacing: '0.16em' }}
@@ -659,32 +685,35 @@ export default function RoomPage() {
                     </button>
                   </div>
 
-                  <div className="mt-3 flex justify-center rounded-xl border border-slate-100 bg-white p-3 dark:border-surface-border">
+                  <div className="relative mt-3 flex justify-center rounded-xl border border-slate-100 bg-white p-3 dark:border-surface-border">
                     <img
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
                         inviteUrl
                       )}`}
                       alt="Scan to join this room"
-                      width={168}
-                      height={168}
-                      className="h-[168px] w-[168px]"
+                      width={176}
+                      height={176}
+                      className="h-[176px] w-[176px] max-w-full"
                     />
                   </div>
 
-                  <p className="mt-3 text-center text-[12px] text-slate-500 dark:text-slate-400">
+                  <p className="relative mt-3 text-center text-[12px] text-slate-500 dark:text-slate-400">
                     Room{' '}
                     <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">
                       {roomCode}
                     </span>
                   </p>
-                  <button
-                    type="button"
-                    onClick={handleCopyInvite}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-surface-border dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
-                  >
-                    <Copy className="h-3 w-3" strokeWidth={2.2} />
-                    Copy link instead
-                  </button>
+
+                  <div className="relative mt-3">
+                    <button
+                      type="button"
+                      onClick={handleCopyInvite}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 dark:border-surface-border dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10"
+                    >
+                      <Copy className="h-3 w-3" strokeWidth={2.2} />
+                      Copy link
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -693,7 +722,7 @@ export default function RoomPage() {
               <button
                 type="button"
                 onClick={handleShareInvite}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 sm:hidden"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 sm:hidden"
               >
                 <Share2 className="h-3.5 w-3.5" strokeWidth={2.2} />
                 Share
@@ -701,7 +730,7 @@ export default function RoomPage() {
             )}
 
             <span
-              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold sm:py-2.5 sm:text-[13px] ${
+              className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold sm:py-2.5 sm:text-[13px] ${
                 peerVisible
                   ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400'
                   : 'border-slate-200 bg-white text-slate-600 dark:border-surface-border dark:bg-white/5 dark:text-slate-300'
@@ -717,7 +746,7 @@ export default function RoomPage() {
               <button
                 type="button"
                 onClick={handleToggleLock}
-                className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold transition-colors sm:px-4 sm:py-2.5 sm:text-[13px] ${
+                className={`inline-flex shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-semibold transition-colors sm:px-4 sm:py-2.5 sm:text-[13px] ${
                   locked
                     ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-surface-border dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10'
@@ -737,7 +766,7 @@ export default function RoomPage() {
               type="button"
               data-disconnect-btn="true"
               onClick={handleDisconnect}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 sm:px-4 sm:py-2.5 sm:text-[13px]"
+              className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-[12px] font-semibold text-slate-600 transition-colors hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 sm:px-4 sm:py-2.5 sm:text-[13px]"
               title="Leave — the room stays open and you can rejoin"
             >
               <LogOut className="h-3.5 w-3.5" strokeWidth={2.4} />
@@ -748,7 +777,7 @@ export default function RoomPage() {
               <button
                 type="button"
                 onClick={handleEndRoom}
-                className="inline-flex items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 sm:px-4 sm:py-2.5 sm:text-[13px]"
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-red-50 px-3 py-2 text-[12px] font-semibold text-red-600 transition-colors hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 sm:px-4 sm:py-2.5 sm:text-[13px]"
                 title="End the room for everyone"
               >
                 <Power className="h-3.5 w-3.5" strokeWidth={2.4} />
@@ -792,7 +821,7 @@ export default function RoomPage() {
               <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50/70 to-purple-50/40 p-3 dark:border-surface-border dark:from-white/[0.02] dark:to-purple-500/5 sm:hidden">
                 <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 shadow-md shadow-purple-600/30">
-                    <YouIcon className="h-4.5 w-4.5 text-white" strokeWidth={2} />
+                    <YouIcon className="h-4 w-4 text-white" strokeWidth={2} />
                   </div>
                   <span className="max-w-full truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
                     You{role === 'host' ? ' (Host)' : ''}
@@ -1259,30 +1288,31 @@ export default function RoomPage() {
                 </div>
               ) : (
                 <div className="mt-5 flex flex-col gap-3">
-                  {transfer.outgoing.map((f) => (
-                    <FileRow
-                      key={f.fileId}
-                      file={f}
-                      direction="out"
-                      onCancel={() => transfer.cancelOutgoing(f.fileId)}
-                      onRemove={() => transfer.removeFile(f.fileId, 'out')}
-                      onRetry={() => transfer.retryFile(f.fileId)}
-                      onCompleteNotify={() => notifyTransferComplete(f.name, 'out')}
-                    />
-                  ))}
-                  {transfer.incoming.map((f) => (
-                    <FileRow
-                      key={f.fileId}
-                      file={f}
-                      direction="in"
-                      onDownload={() => transfer.downloadFile(f.fileId)}
-                      onAccept={() => transfer.acceptOffer(f.fileId)}
-                      onReject={() => transfer.rejectOffer(f.fileId)}
-                      onCancel={() => transfer.cancelIncoming(f.fileId)}
-                      onRemove={() => transfer.removeFile(f.fileId, 'in')}
-                      onCompleteNotify={() => notifyTransferComplete(f.name, 'in')}
-                    />
-                  ))}
+                  {queueItems.map(({ file: f, direction }) =>
+                    direction === 'out' ? (
+                      <FileRow
+                        key={f.fileId}
+                        file={f}
+                        direction="out"
+                        onCancel={() => transfer.cancelOutgoing(f.fileId)}
+                        onRemove={() => transfer.removeFile(f.fileId, 'out')}
+                        onRetry={() => transfer.retryFile(f.fileId)}
+                        onCompleteNotify={() => notifyTransferComplete(f.name, 'out')}
+                      />
+                    ) : (
+                      <FileRow
+                        key={f.fileId}
+                        file={f}
+                        direction="in"
+                        onDownload={() => transfer.downloadFile(f.fileId)}
+                        onAccept={() => transfer.acceptOffer(f.fileId)}
+                        onReject={() => transfer.rejectOffer(f.fileId)}
+                        onCancel={() => transfer.cancelIncoming(f.fileId)}
+                        onRemove={() => transfer.removeFile(f.fileId, 'in')}
+                        onCompleteNotify={() => notifyTransferComplete(f.name, 'in')}
+                      />
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -1356,7 +1386,7 @@ function FileRow({
   const etaLabel = isActive && etaSeconds != null ? formatETA(etaSeconds) : null;
 
   const statusLabel = (() => {
-    if (isCompleted) return 'Complete';
+    if (isCompleted) return isIncoming ? 'Received' : 'Sent';
     if (isFailed) return 'Failed';
     if (isRejected) return 'Rejected';
     if (isCancelled) return 'Cancelled';
@@ -1376,7 +1406,21 @@ function FileRow({
 
   const TypeIcon = getFileTypeIcon(file.mimeType);
 
+  const isActiveOrPending = isPending || isWaiting || isTransferring || isReceiving;
+
   const handleRemove = () => {
+    // For anything still in flight or awaiting a response, the X must actually
+    // cancel/reject so the other side's row updates too — not just disappear
+    // locally while the peer still sees a pending request or a stalled transfer.
+    if (isActiveOrPending) {
+      if (isIncoming) {
+        if (isPending) onReject?.();
+        else onCancel?.();
+      } else {
+        onCancel?.();
+      }
+      return;
+    }
     setRemoving(true);
     setTimeout(() => onRemove?.(), 220);
   };
@@ -1389,7 +1433,7 @@ function FileRow({
     >
       <div className="flex items-center gap-2.5 sm:gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-white/5 sm:h-10 sm:w-10">
-          <TypeIcon className="h-4.5 w-4.5 text-slate-500 dark:text-slate-400 sm:h-5 sm:w-5" />
+          <TypeIcon className="h-4 w-4 text-slate-500 dark:text-slate-400 sm:h-5 sm:w-5" />
         </div>
 
         <div className="min-w-0 flex-1">

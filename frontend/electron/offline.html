@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>WebDrop — Offline</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        background: #1a1a1a; color: #f5f5f5;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        text-align: center;
+      }
+      .box { max-width: 420px; padding: 24px; }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+      p  { color: #a3a3a3; margin: 0 0 20px; line-height: 1.5; }
+      button {
+        background: #f5f5f5; color: #1a1a1a; border: 0; border-radius: 10px;
+        padding: 10px 22px; font-size: 15px; font-weight: 600; cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>Can't reach WebDrop</h1>
+      <p>Check your internet connection and try again.</p>
+      <button onclick="location.href='https://webdrop-eight.vercel.app/'">Retry</button>
+    </div>
+  </body>
+</html>

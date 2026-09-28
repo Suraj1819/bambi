@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WebDrop</string>
+    <string name="title_activity_main">WebDrop</string>
+    <string name="package_name">com.webdrop.app</string>
+    <string name="custom_url_scheme">com.webdrop.app</string>
+</resources>
