@@ -1,42 +1,65 @@
-# ================================
+# ==================================================
 
-# WebDrop - Git Ignore
+# WebDrop - Root Git Ignore
 
-# ================================
+# React + Vite + Electron + Capacitor + Node.js
+
+# ==================================================
+
+# ==================================================
 
 # Dependencies
+
+# ==================================================
 
 node_modules/
 **/node_modules/
 
-# Environment files
+.pnp/
+.pnp.js
+
+# ==================================================
+
+# Environment Variables
+
+# ==================================================
 
 .env
 .env.*
 !.env.example
 
+# ==================================================
+
 # Logs
+
+# ==================================================
 
 *.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
+lerna-debug.log*
 
-# ================================
+# ==================================================
 
 # React / Vite
 
-# ================================
+# ==================================================
 
 dist/
 **/dist/
-.vite/
 
-# ================================
+.vite/
+**/.vite/
+
+.cache/
+**/.cache/
+
+# ==================================================
 
 # Electron
 
-# ================================
+# ==================================================
 
 # Electron Builder output
 
@@ -55,24 +78,35 @@ release/
 *.AppImage
 *.asar
 
-# Electron build/cache
+# Electron Builder configuration/cache
 
 electron-builder.yml
 electron-builder.yaml
 electron-builder.json
+
+.electron/
 **/.electron/
+
+electron-cache/
 **/electron-cache/
 
-# ================================
+# Electron generated directories
+
+out/
+**/out/
+
+# ==================================================
 
 # Capacitor / Android
 
-# ================================
+# ==================================================
 
-# Android generated files
+# Gradle
 
 .gradle/
 **/.gradle/
+
+# Android build output
 
 build/
 **/build/
@@ -83,8 +117,7 @@ bin/
 gen/
 **/gen/
 
-out/
-**/out/
+# Android binaries
 
 *.apk
 *.aab
@@ -93,37 +126,65 @@ out/
 *.dex
 *.class
 
-# Android local configuration
+# Android local SDK configuration
 
 local.properties
 
-# Android Studio / IntelliJ
-
-.idea/
-*.iml
-
-# Android generated/native files
+# Native build
 
 .externalNativeBuild/
-.cxx/
+**/.externalNativeBuild/
 
-# Proguard
+.cxx/
+**/.cxx/
+
+# ProGuard
 
 proguard/
 
-# Capacitor generated files
+# ==================================================
+
+# Android Studio / IntelliJ
+
+# ==================================================
+
+.idea/
+**/.idea/
+
+*.iml
+
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries/
+.idea/libraries/
+.idea/caches/
+.idea/modules.xml
+.idea/navEditor.xml
+
+# ==================================================
+
+# Capacitor Generated Files
+
+# ==================================================
 
 capacitor-cordova-android-plugins/
-android/app/src/main/assets/public/
-android/app/src/main/assets/capacitor.config.json
-android/app/src/main/assets/capacitor.plugins.json
-android/app/src/main/res/xml/config.xml
+**/capacitor-cordova-android-plugins/
 
-# ================================
+# Generated Capacitor web assets
+
+frontend/android/app/src/main/assets/
+
+# Generated Capacitor config
+
+frontend/android/app/src/main/res/xml/config.xml
+
+# ==================================================
 
 # Fastlane
 
-# ================================
+# ==================================================
 
 fastlane/report.xml
 fastlane/Preview.html
@@ -131,31 +192,77 @@ fastlane/screenshots/
 fastlane/test_output/
 fastlane/readme.md
 
-# ================================
+# ==================================================
 
-# Misc
+# Android / Cordova Generated Files
 
-# ================================
+# ==================================================
 
-captures/
 .navigation/
+captures/
+
 *.hprof
 
+# ==================================================
+
 # VS Code
+
+# ==================================================
 
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 
-# OS files
+# ==================================================
+
+# OS Generated Files
+
+# ==================================================
 
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Temporary files
+# ==================================================
+
+# Temporary / Backup Files
+
+# ==================================================
 
 *.tmp
 *.temp
 *.swp
 *.swo
 *.bak
+*.old
+*~
+
+# ==================================================
+
+# Coverage / Testing
+
+# ==================================================
+
+coverage/
+.nyc_output/
+
+# ==================================================
+
+# TypeScript / Tooling Cache
+
+# ==================================================
+
+*.tsbuildinfo
+
+# ==================================================
+
+# Miscellaneous Build / Cache
+
+# ==================================================
+
+.eslintcache
+.stylelintcache
+.parcel-cache/
+.turbo/
+.vercel/
+.netlify/
