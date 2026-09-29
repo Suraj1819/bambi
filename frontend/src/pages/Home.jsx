@@ -73,7 +73,7 @@ const APP_DOWNLOADS = [
     versions: [
       {
         version: '1.0.0',
-        url: 'https://github.com/Suraj1819/bambi/releases/download/v1.0.0/WebDrop%20Setup%201.0.0.exe',
+        url: 'https://github.com/Suraj1819/bambi/releases/download/v1.0.0/WebDrop.Setup.1.0.0.exe',
         size: '',
         date: '',
       },
