@@ -26,17 +26,16 @@ import {
   Power,
   Lock,
   Unlock,
-  UserX,
   Share2,
   RotateCcw,
   Clock,
   QrCode,
-  ArrowRightLeft,
 } from 'lucide-react';
 import { useRoom, getHostToken, saveHostToken, clearHostToken, addRecentRoom } from '../context/RoomContext';
 import { useWebRTC } from '../hooks/useWebRTC';
 import { useFileTransfer } from '../hooks/useFileTransfer';
 import { toast } from '../components/common/ToastContainer';
+import PeerRadar from '../components/common/PeerRadar';
 import {
   detectDevice,
   detectDeviceInfo,
@@ -345,14 +344,6 @@ export default function RoomPage() {
 
   const waitingForLabel =
     role === 'host' ? 'Waiting for guest' : role === 'guest' ? 'Waiting for host' : 'Waiting for peer';
-
-  const mapFooterLabel = (() => {
-    if (connected) return null;
-    if (peerReveal === 'listening') return 'Listening';
-    if (peerReveal === 'fetching') return 'Fetching device…';
-    if (connectionState === 'establishing') return 'Establishing';
-    return 'Listening';
-  })();
 
   const stateInfo = {
     waiting: {
@@ -803,10 +794,10 @@ export default function RoomPage() {
                     className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
                     style={{ letterSpacing: '0.22em' }}
                   >
-                    Peer Topology
+                    Live Topology
                   </p>
                   <h3 className="mt-1 font-heading text-[18px] font-bold tracking-tight text-slate-900 dark:text-white sm:text-[20px]">
-                    Connection map
+                    Peer radar
                   </h3>
                 </div>
                 {connectionState === 'connected' ? (
@@ -816,175 +807,21 @@ export default function RoomPage() {
                 )}
               </div>
 
-              {/* Compact mobile connection strip — avoids the absolute-positioned
-                  canvas overlapping on narrow screens */}
-              <div className="mt-4 flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-gradient-to-r from-slate-50/70 to-purple-50/40 p-3 dark:border-surface-border dark:from-white/[0.02] dark:to-purple-500/5 sm:hidden">
-                <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 shadow-md shadow-purple-600/30">
-                    <YouIcon className="h-4 w-4 text-white" strokeWidth={2} />
-                  </div>
-                  <span className="max-w-full truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                    You{role === 'host' ? ' (Host)' : ''}
-                  </span>
-                </div>
-
-                <div className="flex shrink-0 flex-col items-center gap-1">
-                  {connected ? (
-                    <ShieldCheck className="h-4 w-4 text-emerald-500" strokeWidth={2.2} />
-                  ) : (
-                    <ArrowRightLeft
-                      className={`h-4 w-4 ${
-                        connectionState === 'establishing'
-                          ? 'animate-pulse text-amber-500'
-                          : 'text-slate-300 dark:text-slate-600'
-                      }`}
-                      strokeWidth={2.2}
-                    />
-                  )}
-                  <span className="text-[9px] font-bold uppercase text-slate-400 dark:text-slate-500">
-                    {connected ? 'Live' : 'P2P'}
-                  </span>
-                </div>
-
-                <div className="flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl border ${
-                      peerVisible
-                        ? connected
-                          ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10'
-                          : 'border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10'
-                        : 'border-slate-200 bg-white dark:border-surface-border dark:bg-white/5'
-                    }`}
-                  >
-                    {peerReveal === 'fetching' && !peerVisible ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-amber-500" strokeWidth={2} />
-                    ) : (
-                      <PeerIcon
-                        className={`h-4 w-4 ${
-                          peerVisible
-                            ? connected
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-amber-600 dark:text-amber-400'
-                            : 'text-slate-300 dark:text-slate-600'
-                        }`}
-                        strokeWidth={2}
-                      />
-                    )}
-                  </div>
-                  <span className="max-w-full truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                    {peerVisible ? peer.deviceName || 'Peer' : mapFooterLabel || 'Waiting'}
-                  </span>
-                </div>
-
-                {role === 'host' && peerVisible && (
-                  <button
-                    type="button"
-                    onClick={() => handleKickPeer(peer.socketId)}
-                    title="Remove this device from the room"
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20"
-                  >
-                    <UserX className="h-3.5 w-3.5" strokeWidth={2.4} />
-                  </button>
-                )}
-              </div>
-
-              {/* Full connection map — sm and up */}
-              <div className="relative mt-5 hidden h-[240px] overflow-hidden rounded-2xl border border-slate-100 bg-gradient-to-b from-slate-50/70 to-purple-50/40 dark:border-surface-border dark:from-white/[0.02] dark:to-purple-500/5 sm:block">
-                <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-purple-200/30 dark:bg-purple-400/10" />
-                <div className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-purple-200/30 dark:bg-purple-400/10" />
-                <div className="absolute left-1/2 top-1/2 h-[60px] w-[60px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-purple-200/60 dark:border-purple-400/20" />
-                <div className="absolute left-1/2 top-1/2 h-[110px] w-[110px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-purple-200/50 dark:border-purple-400/15" />
-                <div className="absolute left-1/2 top-1/2 h-[160px] w-[160px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-purple-200/40 dark:border-purple-400/10" />
-
-                <div className="absolute left-1/2 top-1/2 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-xl bg-purple-600 shadow-lg shadow-purple-600/30">
-                  <span className="text-[14px] text-white">◉</span>
-                </div>
-                <p
-                  className="absolute left-1/2 top-1/2 mt-[28px] -translate-x-1/2 text-[9px] font-bold uppercase text-slate-400 dark:text-slate-500"
-                  style={{ letterSpacing: '0.22em' }}
-                >
-                  P2P
-                </p>
-
-                <div className="absolute left-[8%] top-[18%] flex flex-col items-start gap-0.5 rounded-lg border border-purple-200 bg-white px-2.5 py-1.5 shadow-sm dark:border-purple-400/20 dark:bg-surface-card">
-                  <div className="flex items-center gap-1.5">
-                    <YouIcon className="h-3.5 w-3.5 text-purple-600" strokeWidth={2} />
-                    <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                      You{role === 'host' ? ' (Host)' : ''}
-                    </span>
-                  </div>
-                  <span className="pl-5 text-[9px] text-slate-400 dark:text-slate-500">
-                    {deviceInfo?.os} · {deviceInfo?.browser}
-                  </span>
-                </div>
-
-                {peerReveal === 'fetching' && !peerVisible && (
-                  <div className="absolute bottom-[18%] right-[8%] flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 shadow-sm dark:border-amber-500/20 dark:bg-amber-500/10">
-                    <Loader2
-                      className="h-3.5 w-3.5 animate-spin text-amber-600 dark:text-amber-400"
-                      strokeWidth={2}
-                    />
-                    <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
-                      Fetching device…
-                    </span>
-                  </div>
-                )}
-
-                {peerVisible && (
-                  <div
-                    className={`absolute bottom-[18%] right-[8%] flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 shadow-sm transition-all duration-300 ${
-                      connected
-                        ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10'
-                        : 'border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10'
-                    }`}
-                  >
-                    <PeerIcon
-                      className={`h-3.5 w-3.5 ${
-                        connected
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-amber-600 dark:text-amber-400'
-                      }`}
-                      strokeWidth={2}
-                    />
-                    <div className="flex flex-col items-start">
-                      <span
-                        className={`text-[11px] font-semibold ${
-                          connected
-                            ? 'text-emerald-700 dark:text-emerald-400'
-                            : 'text-amber-700 dark:text-amber-400'
-                        }`}
-                      >
-                        {peer.deviceName || 'Peer'}
-                      </span>
-                      {peer.deviceInfo && (
-                        <span className="text-[9px] text-slate-400 dark:text-slate-500">
-                          {peer.deviceInfo.os}
-                          {peer.deviceInfo.browser ? ` · ${peer.deviceInfo.browser}` : ''}
-                        </span>
-                      )}
-                    </div>
-                    {role === 'host' && (
-                      <button
-                        type="button"
-                        onClick={() => handleKickPeer(peer.socketId)}
-                        title="Remove this device from the room"
-                        className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-red-500 hover:bg-red-100 dark:hover:bg-red-500/20"
-                      >
-                        <UserX className="h-3 w-3" strokeWidth={2.4} />
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {!connected && mapFooterLabel && (
-                  <div
-                    className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase text-slate-400 dark:text-slate-500"
-                    style={{ letterSpacing: '0.22em' }}
-                  >
-                    {mapFooterLabel}
-                  </div>
-                )}
-              </div>
+              {/* Peer radar: search animation jab tak device nahi milta,
+                  connect hone ke baad poori device details */}
+              <PeerRadar
+                role={role}
+                peer={peer}
+                peerVisible={peerVisible}
+                peerReveal={peerReveal}
+                connected={connected}
+                connectionState={connectionState}
+                deviceName={deviceName}
+                deviceInfo={deviceInfo}
+                YouIcon={YouIcon}
+                PeerIcon={PeerIcon}
+                onKickPeer={handleKickPeer}
+              />
 
               <div className="mt-5 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-100 pb-3 dark:border-surface-border">
