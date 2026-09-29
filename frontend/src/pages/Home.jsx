@@ -65,20 +65,20 @@ const APP_DOWNLOADS = [
     ],
   },
   {
-    id: 'windows',
-    name: 'Windows',
-    ext: '.exe',
-    icon: Monitor,
-    note: 'If a SmartScreen warning appears, choose "More info" → "Run anyway".',
-    versions: [
-      {
-        version: '1.0.0',
-        url: 'https://github.com/Suraj1819/bambi/releases/download/v1.0.0/WebDrop.Setup.1.0.0.exe',
-        size: '',
-        date: '',
-      },
-    ],
-  },
+  id: 'windows',
+  name: 'Windows',
+  ext: '.exe',
+  icon: Monitor,
+  note: 'If a SmartScreen warning appears, choose "More info" → "Run anyway".',
+  versions: [
+    {
+      version: '1.0.0',
+      url: 'https://github.com/Suraj1819/bambi/releases/download/v1.0.0/WebDrop.Setup.1.0.0.exe',
+      size: '229 MB',
+      date: '',
+    },
+  ],
+}
 ];
 
 function detectPlatform() {
