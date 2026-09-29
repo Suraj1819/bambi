@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Github, ArrowUpRight } from 'lucide-react';
 
-import logo from './Logo.png';
+import logo from '../../assets/images/Logo.png';
 
 export default function Footer() {
   const year = new Date().getFullYear();

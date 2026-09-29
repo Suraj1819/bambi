@@ -11,7 +11,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
-import logo from './Logo.png';
+// NOTE: filename ka case exactly match hona chahiye (Vercel/Linux case-sensitive hai)
+import logo from '../../assets/images/Logo.png';
 import { useTheme } from '../../context/ThemeContext';
 import { useRoom } from '../../context/RoomContext';
 import { toast } from './ToastContainer';
