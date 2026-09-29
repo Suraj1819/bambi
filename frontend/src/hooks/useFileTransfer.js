@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FILE_CHUNK_SIZE,
+  FILE_READ_BLOCK_SIZE,
   BUFFER_HIGH_WATERMARK,
   BUFFER_LOW_WATERMARK,
 } from '../utils/constants';
@@ -36,21 +37,60 @@ function makeSpeedTracker() {
   };
 }
 
-/** Yield to the browser so the UI stays responsive during large transfers */
-function yieldToMain() {
-  return new Promise((resolve) => setTimeout(resolve, 0));
+/**
+ * Buffer BUFFER_LOW_WATERMARK tak khali hone ka intezaar karta hai.
+ * Polling ki jagah 'bufferedamountlow' event use hota hai, taaki
+ * buffer khali hote hi sender turant dobara chal pade (koi 50ms ka gap nahi).
+ */
+function waitForDrain(dc) {
+  return new Promise((resolve) => {
+    if (dc.readyState !== 'open' || dc.bufferedAmount <= BUFFER_LOW_WATERMARK) {
+      resolve();
+      return;
+    }
+
+    let timer;
+    const done = () => {
+      dc.removeEventListener('bufferedamountlow', done);
+      dc.removeEventListener('close', done);
+      clearTimeout(timer);
+      resolve();
+    };
+
+    dc.addEventListener('bufferedamountlow', done);
+    dc.addEventListener('close', done);
+    timer = setTimeout(done, 1000); // safety net
+  });
+}
+
+/** Sab data network par nikal jaye (bufferedAmount == 0) tab tak ruko */
+function waitForEmpty(dc) {
+  return new Promise((resolve) => {
+    const check = () => {
+      if (dc.readyState !== 'open' || dc.bufferedAmount === 0) resolve();
+      else setTimeout(check, 50);
+    };
+    check();
+  });
 }
 
 /**
- * FIX: `dataChannelOpen` (from useWebRTC) is now accepted so this hook
- * knows the moment the connection comes back and can automatically
- * flush anything that was queued while it was down — the user should
- * never have to reselect a file just because the connection blipped
- * while the OS file picker was open, or while a transfer was mid-flight.
+ * `dataChannelOpen` (from useWebRTC) is accepted so this hook knows the
+ * moment the connection comes back and can automatically flush anything
+ * that was queued while it was down.
  */
 export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   const [outgoing, setOutgoing] = useState([]);
   const [incoming, setIncoming] = useState([]);
+
+  const outgoingRef = useRef([]);
+  const incomingRef = useRef([]);
+  useEffect(() => {
+    outgoingRef.current = outgoing;
+  }, [outgoing]);
+  useEffect(() => {
+    incomingRef.current = incoming;
+  }, [incoming]);
 
   const incomingBuffers = useRef(new Map());
   const receiveOrder = useRef([]);
@@ -59,22 +99,18 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   const lastAckSentRef = useRef(0);
   const lastUiUpdateRef = useRef(0);
   const lastRecvUiUpdateRef = useRef(0);
+
+  // Sender side: speed ab receiver ke ACK (file-progress) se nikalti hai,
+  // buffer me daali gayi bytes se nahi. Isliye speed/ETA asli dikhte hain.
   const sendSpeedTrackers = useRef(new Map());
   const recvSpeedTrackers = useRef(new Map());
   const retryFileRef = useRef(new Map());
 
-  /* ------------------------------------------------------------
-     FIX: files waiting for a DataChannel to (re)open. Each entry
-     is { file, meta } — meta.fileId stays the same across retries
-     so the UI row is reused instead of duplicated.
-  ------------------------------------------------------------ */
   const pendingFilesRef = useRef([]);
   const flushingRef = useRef(false);
 
   /* ============================================================
      SEND ONE FILE'S OFFER, WAIT FOR ACCEPT, THEN STREAM IT
-     (extracted out of sendFiles so both sendFiles and the
-     auto-resume flow below can reuse the exact same logic)
   ============================================================ */
   const offerAndSend = async (dc, file, meta) => {
     dc.send(
@@ -113,7 +149,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   };
 
   /* ============================================================
-     SEND — sequential, streamed (no full-file arrayBuffer)
+     SEND — sequential, streamed
   ============================================================ */
   const sendFiles = useCallback(
     async (files) => {
@@ -125,7 +161,6 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
       }
       if (valid.length === 0) return;
 
-      // One file at a time: offer → wait accept → stream fully → next
       for (const file of valid) {
         const meta = {
           fileId: generateFileId(),
@@ -146,9 +181,6 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
             progress: 0,
             bytesSent: 0,
             speed: 0,
-            // FIX: 'queued' instead of silently dropping the file
-            // when the channel isn't open yet (e.g. still reconnecting
-            // right after the mobile file picker closed).
             status: isOpen ? 'waiting' : 'queued',
             direction: 'out',
           },
@@ -169,11 +201,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   );
 
   /* ============================================================
-     FIX: FLUSH QUEUED FILES
-     Called automatically whenever the DataChannel (re)opens.
-     Sends everything that was queued while disconnected, in order.
-     If the connection drops again partway through, whatever is
-     left just goes back into the queue for the next reconnect.
+     FLUSH QUEUED FILES (DataChannel reopen hone par)
   ============================================================ */
   const flushPendingFiles = useCallback(async () => {
     if (flushingRef.current) return;
@@ -190,16 +218,11 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
         const dc = getDataChannel();
 
         if (!dc || dc.readyState !== 'open') {
-          // Dropped again before we got here — keep this one and
-          // everything after it queued for the next reconnect.
           pendingFilesRef.current.push(...queue.slice(i));
           return;
         }
 
-        console.log(
-          '[send] Connection back, resuming queued file:',
-          meta.name
-        );
+        console.log('[send] Connection back, resuming queued file:', meta.name);
 
         setOutgoing((prev) =>
           prev.map((f) =>
@@ -214,11 +237,6 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
     }
   }, [getDataChannel]);
 
-  /* ------------------------------------------------------------
-     FIX: whenever the DataChannel flips to open (fresh connection
-     OR a reconnect after the file picker / a network blip), try to
-     send anything that got queued while it was down.
-  ------------------------------------------------------------ */
   useEffect(() => {
     if (dataChannelOpen) {
       flushPendingFiles();
@@ -226,117 +244,142 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   }, [dataChannelOpen, flushPendingFiles]);
 
   /**
-   * Stream a file in small slices — never load the whole file into RAM.
-   * Progress UI is throttled (~8 updates/sec) so React stays responsive
-   * even for multi‑GB transfers.
+   * Fast streaming send:
+   *  - file ko 4 MB ke blocks me padhta hai (har 16 KB ke liye alag read nahi)
+   *  - block ko 64 KB chunks me kaat kar zero-copy view se bhejta hai
+   *  - backpressure: bufferedamountlow event se (polling nahi)
+   *  - speed = receiver ke ACK se (asli speed), buffer se nahi
    */
   const sendSingleFile = async (dc, file, meta) => {
+    if (cancelledRef.current.has(meta.fileId)) {
+      try {
+        dc.send(JSON.stringify({ type: 'file-cancel', fileId: meta.fileId }));
+      } catch {}
+      setOutgoing((prev) =>
+        prev.map((f) =>
+          f.fileId === meta.fileId && f.status !== 'completed'
+            ? { ...f, status: 'cancelled', speed: 0 }
+            : f
+        )
+      );
+      return;
+    }
+
     setOutgoing((prev) =>
       prev.map((f) =>
         f.fileId === meta.fileId ? { ...f, status: 'transferring' } : f
       )
     );
 
+    dc.bufferedAmountLowThreshold = BUFFER_LOW_WATERMARK;
     dc.send(JSON.stringify({ type: 'file-start', ...meta }));
 
     const total = file.size;
     let offset = 0;
-    let chunksSinceYield = 0;
 
-    const tracker = makeSpeedTracker();
-    sendSpeedTrackers.current.set(meta.fileId, tracker);
+    // ACK-based speed tracker (file-progress handler isko update karta hai)
+    sendSpeedTrackers.current.set(meta.fileId, makeSpeedTracker());
     lastUiUpdateRef.current = 0;
 
-    while (offset < total) {
+    // true return kare to loop rok do (cancel / connection drop)
+    const shouldStop = () => {
       if (cancelledRef.current.has(meta.fileId)) {
         try {
           dc.send(JSON.stringify({ type: 'file-cancel', fileId: meta.fileId }));
         } catch {}
         sendSpeedTrackers.current.delete(meta.fileId);
-        return;
+        setOutgoing((prev) =>
+          prev.map((f) =>
+            f.fileId === meta.fileId && f.status !== 'completed'
+              ? { ...f, status: 'cancelled', speed: 0 }
+              : f
+          )
+        );
+        return true;
       }
 
       if (dc.readyState !== 'open') {
-        // FIX: connection dropped mid-transfer — re-queue this file
-        // (from the start) instead of just marking it failed forever.
-        console.warn(
-          '[send] DataChannel dropped mid-transfer, re-queueing:',
-          meta.name
-        );
+        console.warn('[send] DataChannel dropped mid-transfer, re-queueing:', meta.name);
 
         setOutgoing((prev) =>
           prev.map((f) =>
             f.fileId === meta.fileId
-              ? { ...f, status: 'queued', bytesSent: 0, speed: 0 }
+              ? { ...f, status: 'queued', bytesSent: 0, bytesReceived: 0, speed: 0 }
               : f
           )
         );
 
         pendingFilesRef.current.push({ file, meta });
         sendSpeedTrackers.current.delete(meta.fileId);
-        return;
+        return true;
       }
 
-      if (dc.bufferedAmount > BUFFER_HIGH_WATERMARK) {
-        await waitForDrain(dc);
+      return false;
+    };
+
+    while (offset < total) {
+      if (shouldStop()) return;
+
+      const blockEnd = Math.min(offset + FILE_READ_BLOCK_SIZE, total);
+      const block = await file.slice(offset, blockEnd).arrayBuffer();
+
+      for (let i = 0; i < block.byteLength; i += FILE_CHUNK_SIZE) {
+        if (shouldStop()) return;
+
+        if (dc.bufferedAmount > BUFFER_HIGH_WATERMARK) {
+          await waitForDrain(dc);
+          if (shouldStop()) return;
+        }
+
+        const len = Math.min(FILE_CHUNK_SIZE, block.byteLength - i);
+        dc.send(new Uint8Array(block, i, len));
+
+        // UI update (fallback progress) — ~5 baar per second
+        const now = Date.now();
+        if (now - lastUiUpdateRef.current > 200) {
+          lastUiUpdateRef.current = now;
+          const sent = offset + i + len;
+          setOutgoing((prev) =>
+            prev.map((f) =>
+              f.fileId === meta.fileId ? { ...f, bytesSent: sent } : f
+            )
+          );
+        }
       }
 
-      // Read only the next small slice — never the whole file
-      const end = Math.min(offset + FILE_CHUNK_SIZE, total);
-      const slice = file.slice(offset, end);
-      const chunk = await slice.arrayBuffer();
-      dc.send(chunk);
-      offset = end;
-
-      const speed = tracker.update(offset);
-
-      // Throttle React state updates to ~8 times per second
-      const now = Date.now();
-      if (now - lastUiUpdateRef.current > 125 || offset >= total) {
-        lastUiUpdateRef.current = now;
-        setOutgoing((prev) =>
-          prev.map((f) =>
-            f.fileId === meta.fileId
-              ? { ...f, bytesSent: offset, speed }
-              : f
-          )
-        );
-      }
-
-      // Yield to the event loop every ~32 chunks so the UI never freezes
-      chunksSinceYield += 1;
-      if (chunksSinceYield >= 32) {
-        chunksSinceYield = 0;
-        await yieldToMain();
-      }
+      offset = blockEnd;
     }
 
     dc.send(JSON.stringify({ type: 'file-complete', fileId: meta.fileId }));
-    
-    // FIX: Ensure sender side also marks speed as 0 upon completion
+
+    // Sab bytes network par nikalne tak "Sent" mat dikhao
+    await waitForEmpty(dc);
+
+    const dropped = dc.readyState !== 'open' && dc.bufferedAmount > 0;
+
     setOutgoing((prev) =>
       prev.map((f) =>
         f.fileId === meta.fileId
-          ? { ...f, status: 'completed', bytesSent: total, progress: 100, speed: 0 }
+          ? dropped
+            ? { ...f, status: 'failed', speed: 0 }
+            : {
+                ...f,
+                status: 'completed',
+                bytesSent: total,
+                bytesReceived: total,
+                progress: 100,
+                speed: 0,
+              }
           : f
       )
     );
 
     sendSpeedTrackers.current.delete(meta.fileId);
-    retryFileRef.current.delete(meta.fileId);
+    if (!dropped) retryFileRef.current.delete(meta.fileId);
   };
 
-  const waitForDrain = (dc) =>
-    new Promise((resolve) => {
-      const check = () => {
-        if (dc.bufferedAmount <= BUFFER_LOW_WATERMARK) resolve();
-        else setTimeout(check, 50);
-      };
-      check();
-    });
-
   /* ============================================================
-     RECEIVE — progress UI also throttled
+     RECEIVE
   ============================================================ */
   const handleIncomingData = useCallback(
     (event) => {
@@ -351,9 +394,6 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
         }
 
         if (msg.type === 'file-offer') {
-          // FIX: if this fileId already exists (e.g. the sender is
-          // re-offering the same file after a reconnect), replace
-          // the stale/failed row instead of adding a duplicate one.
           setIncoming((prev) => {
             const next = [...prev];
 
@@ -381,12 +421,19 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
           return;
         }
 
+        // Receiver ka ACK -> sender ki asli progress + asli speed
         if (msg.type === 'file-progress') {
           const { fileId, received } = msg;
+          const tracker = sendSpeedTrackers.current.get(fileId);
+          const speed = tracker ? tracker.update(received) : 0;
+
           setOutgoing((prev) =>
-            prev.map((f) =>
-              f.fileId === fileId ? { ...f, bytesReceived: received } : f
-            )
+            prev.map((f) => {
+              if (f.fileId !== fileId) return f;
+              return f.status === 'transferring'
+                ? { ...f, bytesReceived: received, speed }
+                : { ...f, bytesReceived: received };
+            })
           );
           return;
         }
@@ -416,18 +463,16 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
             type: entry.meta.mimeType || 'application/octet-stream',
           });
 
-          // FIX: Ensure final state is perfectly synced.
-          // Set speed to 0 and bytesReceived to total size so UI is exactly 100% and stops showing speed.
           setIncoming((prev) =>
             prev.map((f) =>
               f.fileId === msg.fileId
-                ? { 
-                    ...f, 
-                    status: 'completed', 
-                    blob, 
+                ? {
+                    ...f,
+                    status: 'completed',
+                    blob,
                     progress: 100,
                     bytesReceived: entry.meta.size,
-                    speed: 0 
+                    speed: 0,
                   }
                 : f
             )
@@ -450,7 +495,9 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
           recvSpeedTrackers.current.delete(fileId);
           setIncoming((prev) =>
             prev.map((f) =>
-              f.fileId === fileId ? { ...f, status: 'cancelled' } : f
+              f.fileId === fileId && f.status !== 'completed'
+                ? { ...f, status: 'cancelled', speed: 0 }
+                : f
             )
           );
           return;
@@ -469,7 +516,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
         return;
       }
 
-      // Binary chunk — always append to the first file in receive order
+      // Binary chunk — hamesha receive order ki pehli file me jodo
       const nextFileId = receiveOrder.current[0];
       if (!nextFileId) return;
 
@@ -481,13 +528,11 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
 
       const chunk = data instanceof ArrayBuffer ? data : new Uint8Array(data).buffer;
       entry.chunks.push(chunk);
-      entry.received += chunk.byteLength || (data.byteLength ?? 0);
+      entry.received += chunk.byteLength;
 
       const tracker = recvSpeedTrackers.current.get(nextFileId);
       const speed = tracker ? tracker.update(entry.received) : 0;
 
-      // FIX: Throttle receive progress UI (~8 updates/sec), 
-      // BUT always update if this is the final chunk to prevent stuck UI.
       const now = Date.now();
       const isLastChunk = entry.received >= entry.meta.size;
       if (now - lastRecvUiUpdateRef.current > 125 || isLastChunk) {
@@ -501,6 +546,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
         );
       }
 
+      // ACK sender ko (~5 baar per second) — sender isi se apni speed nikalta hai
       if (now - lastAckSentRef.current > 200) {
         lastAckSentRef.current = now;
         const dc = getDataChannel();
@@ -559,16 +605,13 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
       cancelledRef.current.add(fileId);
       sendSpeedTrackers.current.delete(fileId);
 
-      // FIX: also drop it from the pending queue if it hasn't been
-      // (re)sent yet, otherwise a cancelled file could still get
-      // auto-resumed on the next reconnect.
       pendingFilesRef.current = pendingFilesRef.current.filter(
         (item) => item.meta.fileId !== fileId
       );
 
       setOutgoing((prev) =>
         prev.map((f) =>
-          f.fileId === fileId ? { ...f, status: 'cancelled' } : f
+          f.fileId === fileId ? { ...f, status: 'cancelled', speed: 0 } : f
         )
       );
 
@@ -607,7 +650,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
 
       setIncoming((prev) =>
         prev.map((f) =>
-          f.fileId === fileId ? { ...f, status: 'cancelled' } : f
+          f.fileId === fileId ? { ...f, status: 'cancelled', speed: 0 } : f
         )
       );
     },
@@ -680,17 +723,27 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   );
 
   const clearAll = useCallback(() => {
+    // Pehle chal rahe / pending transfers ko cancel karo taaki dusri taraf bhi ruk jaye
+    outgoingRef.current
+      .filter((f) => ['waiting', 'queued', 'transferring'].includes(f.status))
+      .forEach((f) => cancelOutgoing(f.fileId));
+
+    incomingRef.current.forEach((f) => {
+      if (f.status === 'pending') rejectOffer(f.fileId);
+      else if (f.status === 'receiving') cancelIncoming(f.fileId);
+    });
+
     setOutgoing([]);
     setIncoming([]);
     incomingBuffers.current.clear();
     receiveOrder.current = [];
     acceptResolversRef.current.clear();
-    cancelledRef.current.clear();
+    // NOTE: cancelledRef ko clear NAHI karte — sender loop usi se rukta hai
     sendSpeedTrackers.current.clear();
     recvSpeedTrackers.current.clear();
     retryFileRef.current.clear();
     pendingFilesRef.current = [];
-  }, []);
+  }, [cancelOutgoing, rejectOffer, cancelIncoming]);
 
   const clearCompleted = useCallback(() => {
     setOutgoing((prev) =>
@@ -706,14 +759,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   }, []);
 
   /* ============================================================
-     FIX: instead of just marking in-flight transfers as permanently
-     'failed' when the peer disconnects, re-queue outgoing ones (we
-     still have the original File object via retryFileRef) so they
-     resume automatically the moment the connection comes back.
-     Incoming transfers can't be resumed this way (we don't have the
-     bytes the sender hasn't sent yet), so those still get marked
-     'failed' — the sender re-offering after reconnect will refresh
-     that row back to 'pending' (see the 'file-offer' handler above).
+     Peer disconnect: outgoing files re-queue, incoming fail
   ============================================================ */
   const markPeerDisconnected = useCallback(() => {
     setOutgoing((prev) =>
@@ -732,10 +778,10 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
               },
             });
 
-            return { ...f, status: 'queued', bytesSent: 0, speed: 0 };
+            return { ...f, status: 'queued', bytesSent: 0, bytesReceived: 0, speed: 0 };
           }
 
-          return { ...f, status: 'failed' };
+          return { ...f, status: 'failed', speed: 0 };
         }
         return f;
       })
@@ -743,7 +789,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
     setIncoming((prev) =>
       prev.map((f) =>
         ['pending', 'receiving'].includes(f.status)
-          ? { ...f, status: 'failed' }
+          ? { ...f, status: 'failed', speed: 0 }
           : f
       )
     );
@@ -767,12 +813,10 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
       };
 
       if (!dc || dc.readyState !== 'open') {
-        // FIX: no open channel right now — queue it instead of
-        // silently failing; it will go out as soon as we reconnect.
         setOutgoing((prev) =>
           prev.map((f) =>
             f.fileId === fileId
-              ? { ...f, status: 'queued', bytesSent: 0, speed: 0 }
+              ? { ...f, status: 'queued', bytesSent: 0, bytesReceived: 0, speed: 0 }
               : f
           )
         );
@@ -783,7 +827,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
       setOutgoing((prev) =>
         prev.map((f) =>
           f.fileId === fileId
-            ? { ...f, status: 'waiting', bytesSent: 0, speed: 0 }
+            ? { ...f, status: 'waiting', bytesSent: 0, bytesReceived: 0, speed: 0 }
             : f
         )
       );

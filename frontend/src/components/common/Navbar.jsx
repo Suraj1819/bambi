@@ -11,7 +11,6 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
-// NOTE: filename ka case exactly match hona chahiye (Vercel/Linux case-sensitive hai)
 import logo from '../../assets/images/Logo.png';
 import { useTheme } from '../../context/ThemeContext';
 import { useRoom } from '../../context/RoomContext';
@@ -49,12 +48,15 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-slate-200/70 bg-white/90 backdrop-blur-xl dark:border-white/[0.06] dark:bg-surface/90">
 
-      {/* Main Navbar */}
+      {/* =========================================================
+          MAIN NAVBAR
+      ========================================================= */}
+
       <div className="mx-auto flex h-[68px] w-full max-w-[1440px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8 xl:px-10">
 
-        {/* ========================================================= */}
-        {/* BRAND */}
-        {/* ========================================================= */}
+        {/* =========================================================
+            BRAND
+        ========================================================= */}
 
         <NavLink
           to="/"
@@ -88,9 +90,9 @@ export default function Navbar() {
           </div>
         </NavLink>
 
-        {/* ========================================================= */}
-        {/* DESKTOP NAVIGATION */}
-        {/* ========================================================= */}
+        {/* =========================================================
+            DESKTOP NAVIGATION
+        ========================================================= */}
 
         <nav className="hidden items-center rounded-2xl border border-slate-200/80 bg-slate-50/80 p-1 dark:border-white/[0.06] dark:bg-white/[0.025] md:flex">
           {NAV_ITEMS.map((item) => (
@@ -114,15 +116,19 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* ========================================================= */}
-        {/* RIGHT CONTROLS */}
-        {/* ========================================================= */}
+        {/* =========================================================
+            RIGHT CONTROLS
+        ========================================================= */}
 
         <div className="flex items-center gap-2">
 
-          {/* Room Status */}
+          {/* =======================================================
+              ROOM STATUS
+          ======================================================= */}
+
           {navLocked && (
             <div className="hidden items-center gap-2 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 dark:border-amber-500/15 dark:bg-amber-500/[0.07] sm:flex">
+
               <div className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-100 dark:bg-amber-500/10">
                 <Lock
                   className="h-3 w-3 text-amber-600 dark:text-amber-400"
@@ -139,33 +145,53 @@ export default function Navbar() {
                   Navigation locked
                 </p>
               </div>
+
             </div>
           )}
 
-          {/* Server Status */}
+          {/* =======================================================
+              SERVER STATUS
+          ======================================================= */}
+
           <div
-            className={`hidden items-center gap-2 rounded-xl border px-3 py-2 sm:flex ${
+            className={`hidden items-center gap-2 rounded-xl border px-3 py-2 transition-all duration-300 sm:flex ${
               connected
                 ? 'border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-500/15 dark:bg-emerald-500/[0.06]'
                 : 'border-red-200/80 bg-red-50/70 dark:border-red-500/15 dark:bg-red-500/[0.06]'
             }`}
           >
-            {/* Status dot */}
-            <span className="relative flex h-2 w-2">
-              {connected && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+
+            {/* Status indicator */}
+            <div className="relative flex h-5 w-5 items-center justify-center">
+
+              {/* Offline pulse */}
+              {!connected && (
+                <>
+                  <span className="absolute inset-0 animate-ping rounded-full bg-red-400/10" />
+
+                  <WifiOff
+                    className="relative h-4 w-4 animate-[wifiOffline_1.4s_ease-in-out_infinite] text-red-500 dark:text-red-400"
+                    strokeWidth={2.3}
+                  />
+                </>
               )}
 
-              <span
-                className={`relative inline-flex h-2 w-2 rounded-full ${
-                  connected
-                    ? 'bg-emerald-500'
-                    : 'bg-red-500'
-                }`}
-              />
-            </span>
+              {/* Online signal */}
+              {connected && (
+                <>
+                  <span className="absolute -inset-1 rounded-full bg-emerald-400/10 animate-[signalGlow_2s_ease-in-out_infinite]" />
 
-            <div className="hidden lg:block leading-none">
+                  <Wifi
+                    className="relative h-4 w-4 text-emerald-500 dark:text-emerald-400 animate-[wifiOnline_2s_ease-in-out_infinite]"
+                    strokeWidth={2.3}
+                  />
+                </>
+              )}
+
+            </div>
+
+            <div className="hidden leading-none lg:block">
+
               <p
                 className={`text-[8px] font-bold uppercase tracking-[0.14em] ${
                   connected
@@ -179,28 +205,38 @@ export default function Navbar() {
               <p className="mt-1 text-[8px] font-medium text-slate-400 dark:text-slate-500">
                 Signaling server
               </p>
+
             </div>
 
-            {/* Compact icon on smaller screens */}
+            {/* Compact status */}
             <div className="lg:hidden">
+
               {connected ? (
                 <Wifi
-                  className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400"
+                  className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 animate-[wifiOnline_2s_ease-in-out_infinite]"
                   strokeWidth={2.2}
                 />
               ) : (
                 <WifiOff
-                  className="h-3.5 w-3.5 text-red-600 dark:text-red-400"
+                  className="h-3.5 w-3.5 text-red-600 dark:text-red-400 animate-[wifiOffline_1.4s_ease-in-out_infinite]"
                   strokeWidth={2.2}
                 />
               )}
+
             </div>
+
           </div>
 
-          {/* Divider */}
+          {/* =======================================================
+              DIVIDER
+          ======================================================= */}
+
           <div className="hidden h-7 w-px bg-slate-200 dark:bg-white/[0.07] sm:block" />
 
-          {/* Theme Toggle */}
+          {/* =======================================================
+              THEME TOGGLE
+          ======================================================= */}
+
           <button
             type="button"
             onClick={toggleTheme}
@@ -212,6 +248,7 @@ export default function Navbar() {
             className="group flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 dark:border-white/[0.07] dark:bg-white/[0.025] dark:text-slate-400 dark:hover:border-white/[0.12] dark:hover:bg-white/[0.05] dark:hover:text-white"
           >
             <span className="transition-transform duration-300 group-hover:rotate-12">
+
               {isDark ? (
                 <Sun
                   className="h-4 w-4"
@@ -223,10 +260,14 @@ export default function Navbar() {
                   strokeWidth={2}
                 />
               )}
+
             </span>
           </button>
 
-          {/* Mobile Menu */}
+          {/* =======================================================
+              MOBILE MENU BUTTON
+          ======================================================= */}
+
           <button
             type="button"
             aria-label="Toggle navigation menu"
@@ -246,12 +287,13 @@ export default function Navbar() {
               />
             )}
           </button>
+
         </div>
       </div>
 
-      {/* =========================================================== */}
-      {/* MOBILE NAVIGATION */}
-      {/* =========================================================== */}
+      {/* ===========================================================
+          MOBILE NAVIGATION
+      =========================================================== */}
 
       <div
         className={`overflow-hidden border-t border-slate-200/70 bg-white/95 backdrop-blur-xl transition-all duration-200 dark:border-white/[0.06] dark:bg-surface/95 md:hidden ${
@@ -262,26 +304,47 @@ export default function Navbar() {
       >
         <nav className="mx-auto w-full max-w-[1440px] px-4 py-3 sm:px-6">
 
-          {/* Mobile Status */}
+          {/* =======================================================
+              MOBILE STATUS
+          ======================================================= */}
+
           <div className="mb-3 grid grid-cols-2 gap-2">
 
-            {/* Connection */}
+            {/* Server */}
             <div
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 ${
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 transition-all duration-300 ${
                 connected
                   ? 'border-emerald-200/80 bg-emerald-50/70 dark:border-emerald-500/15 dark:bg-emerald-500/[0.06]'
                   : 'border-red-200/80 bg-red-50/70 dark:border-red-500/15 dark:bg-red-500/[0.06]'
               }`}
             >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  connected
-                    ? 'bg-emerald-500'
-                    : 'bg-red-500'
-                }`}
-              />
+
+              <div className="relative flex h-5 w-5 items-center justify-center">
+
+                {connected ? (
+                  <>
+                    <span className="absolute -inset-1 rounded-full bg-emerald-400/10 animate-[signalGlow_2s_ease-in-out_infinite]" />
+
+                    <Wifi
+                      className="relative h-4 w-4 text-emerald-500 dark:text-emerald-400 animate-[wifiOnline_2s_ease-in-out_infinite]"
+                      strokeWidth={2.2}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <span className="absolute inset-0 animate-ping rounded-full bg-red-400/10" />
+
+                    <WifiOff
+                      className="relative h-4 w-4 text-red-500 dark:text-red-400 animate-[wifiOffline_1.4s_ease-in-out_infinite]"
+                      strokeWidth={2.2}
+                    />
+                  </>
+                )}
+
+              </div>
 
               <div className="leading-none">
+
                 <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">
                   Server
                 </p>
@@ -295,7 +358,9 @@ export default function Navbar() {
                 >
                   {connected ? 'Online' : 'Offline'}
                 </p>
+
               </div>
+
             </div>
 
             {/* Room */}
@@ -306,6 +371,7 @@ export default function Navbar() {
                   : 'border-slate-200 bg-slate-50 dark:border-white/[0.06] dark:bg-white/[0.025]'
               }`}
             >
+
               {navLocked ? (
                 <Lock
                   className="h-3.5 w-3.5 text-amber-500"
@@ -319,6 +385,7 @@ export default function Navbar() {
               )}
 
               <div className="leading-none">
+
                 <p className="text-[8px] font-bold uppercase tracking-[0.12em] text-slate-400">
                   Room
                 </p>
@@ -332,12 +399,19 @@ export default function Navbar() {
                 >
                   {navLocked ? 'Active' : 'Ready'}
                 </p>
+
               </div>
+
             </div>
+
           </div>
 
-          {/* Links */}
+          {/* =======================================================
+              MOBILE LINKS
+          ======================================================= */}
+
           <div className="space-y-1">
+
             {NAV_ITEMS.map((item) => (
               <NavLink
                 key={item.to}
@@ -370,10 +444,15 @@ export default function Navbar() {
                 )}
               </NavLink>
             ))}
+
           </div>
 
-          {/* Mobile Footer */}
+          {/* =======================================================
+              MOBILE FOOTER
+          ======================================================= */}
+
           <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3 dark:border-white/[0.06]">
+
             <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-slate-400">
               WebDrop
             </span>
@@ -381,9 +460,97 @@ export default function Navbar() {
             <span className="text-[8px] font-medium text-slate-400 dark:text-slate-500">
               Direct. Private. Fast.
             </span>
+
           </div>
+
         </nav>
       </div>
+
+      {/* =============================================================
+          ANIMATIONS
+      ============================================================= */}
+
+      <style>{`
+
+        /* ---------------------------------------------------------
+           OFFLINE
+           WifiOff icon slowly moves up/down, giving a
+           disconnected/searching feeling.
+        --------------------------------------------------------- */
+
+        @keyframes wifiOffline {
+          0% {
+            transform: translateY(0px) rotate(0deg);
+            opacity: 0.65;
+          }
+
+          25% {
+            transform: translateY(-2px) rotate(-4deg);
+            opacity: 0.9;
+          }
+
+          50% {
+            transform: translateY(2px) rotate(4deg);
+            opacity: 0.65;
+          }
+
+          75% {
+            transform: translateY(-2px) rotate(-3deg);
+            opacity: 0.9;
+          }
+
+          100% {
+            transform: translateY(0px) rotate(0deg);
+            opacity: 0.65;
+          }
+        }
+
+        /* ---------------------------------------------------------
+           ONLINE
+           Wifi icon gently scales/pulses to indicate
+           an active connection.
+        --------------------------------------------------------- */
+
+        @keyframes wifiOnline {
+          0% {
+            transform: scale(0.92);
+            opacity: 0.75;
+          }
+
+          50% {
+            transform: scale(1.08);
+            opacity: 1;
+          }
+
+          100% {
+            transform: scale(0.92);
+            opacity: 0.75;
+          }
+        }
+
+        /* ---------------------------------------------------------
+           ONLINE GLOW
+        --------------------------------------------------------- */
+
+        @keyframes signalGlow {
+          0% {
+            transform: scale(0.7);
+            opacity: 0.15;
+          }
+
+          50% {
+            transform: scale(1.15);
+            opacity: 0.5;
+          }
+
+          100% {
+            transform: scale(0.7);
+            opacity: 0.15;
+          }
+        }
+
+      `}</style>
+
     </header>
   );
 }

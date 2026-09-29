@@ -101,6 +101,79 @@ function notifyTransferComplete(fileName, direction) {
   } catch {}
 }
 
+// ---------- Folder helpers ----------
+const IGNORED_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
+
+// File ko uske folder-path ke saath rename karke (e.g. "photos/2024/a.jpg") wrap karta hai
+function withRelativePath(file, path) {
+  if (!path || !path.includes('/') || path === file.name) return file;
+  try {
+    return new File([file], path, { type: file.type, lastModified: file.lastModified });
+  } catch {
+    return file;
+  }
+}
+
+function readAllEntries(reader) {
+  return new Promise((resolve, reject) => {
+    const all = [];
+    const readBatch = () =>
+      reader.readEntries((batch) => {
+        if (!batch.length) return resolve(all);
+        all.push(...batch);
+        readBatch(); // readEntries max ~100 items deta hai, isliye loop
+      }, reject);
+    readBatch();
+  });
+}
+
+async function walkEntry(entry, parentPath = '') {
+  if (entry.isFile) {
+    const file = await new Promise((res, rej) => entry.file(res, rej));
+    return [withRelativePath(file, parentPath + entry.name)];
+  }
+  if (entry.isDirectory) {
+    const children = await readAllEntries(entry.createReader());
+    const nested = await Promise.all(
+      children.map((child) => walkEntry(child, `${parentPath}${entry.name}/`))
+    );
+    return nested.flat();
+  }
+  return [];
+}
+
+// Drop event se files + folders (subfolders ke saath) nikalta hai
+async function collectDroppedFiles(dataTransfer) {
+  if (!dataTransfer) return [];
+  const items = Array.from(dataTransfer.items || []);
+  const canWalk = items.length > 0 && typeof items[0].webkitGetAsEntry === 'function';
+  if (!canWalk) return Array.from(dataTransfer.files || []);
+
+  // entries ko sync nikalna zaroori hai (await ke baad items invalid ho jate hain)
+  const entries = items
+    .filter((i) => i.kind === 'file')
+    .map((i) => i.webkitGetAsEntry())
+    .filter(Boolean);
+
+  const results = await Promise.all(entries.map((e) => walkEntry(e)));
+  return results.flat().filter((f) => !IGNORED_FILES.has(f.name.split('/').pop()));
+}
+
+// <input webkitdirectory> ki files me relative path jodta hai
+function collectInputFiles(fileList) {
+  return Array.from(fileList || [])
+    .map((f) => withRelativePath(f, f.webkitRelativePath))
+    .filter((f) => !IGNORED_FILES.has(f.name.split('/').pop()));
+}
+
+// React "directory" attributes ko reliably set karne ke liye
+function setFolderAttrs(el) {
+  if (!el) return;
+  el.setAttribute('webkitdirectory', '');
+  el.setAttribute('directory', '');
+  el.setAttribute('mozdirectory', '');
+}
+
 export default function RoomPage() {
   const { roomCode: urlCode } = useParams();
   const navigate = useNavigate();
@@ -290,7 +363,10 @@ export default function RoomPage() {
   }, []);
 
   const webrtc = useWebRTC({ socket, roomCode, role, onIncomingData });
-  const transfer = useFileTransfer({ getDataChannel: webrtc.getDataChannel });
+  const transfer = useFileTransfer({
+    getDataChannel: webrtc.getDataChannel,
+    dataChannelOpen: webrtc.dataChannelOpen,
+  });
 
   const peer = users.find((u) => u.socketId !== socket?.id);
   const prevPeerRef = useRef(false);
@@ -438,6 +514,10 @@ export default function RoomPage() {
         toast.warning('Not connected yet', `${waitingForLabel}. Files will be enabled once connected.`);
         return;
       }
+      const folderCount = files.filter((f) => f.name.includes('/')).length;
+      if (folderCount > 0) {
+        toast.success('Folder selected', `${files.length} files will be sent.`);
+      }
       const big = files.find((f) => f.size > LARGE_FILE_WARNING_BYTES);
       if (big) {
         toast.warning(
@@ -528,7 +608,7 @@ export default function RoomPage() {
   // before any incoming one regardless of what actually needs attention.
   const queuePriority = (status) => {
     if (status === 'pending') return 0;
-    if (status === 'waiting' || status === 'transferring' || status === 'receiving') return 1;
+    if (status === 'waiting' || status === 'queued' || status === 'transferring' || status === 'receiving') return 1;
     if (status === 'completed') return 2;
     return 3;
   };
@@ -545,6 +625,12 @@ export default function RoomPage() {
       })
       .map(({ item }) => item);
   }, [transfer.incoming, transfer.outgoing]);
+
+  // Peer radar ke bubbles ki direction: kaun bhej raha hai, kaun le raha hai
+  const sendingNow = transfer.outgoing.some((f) => f.status === 'transferring');
+  const receivingNow = transfer.incoming.some((f) => f.status === 'receiving');
+  const radarFlow =
+    sendingNow && receivingNow ? 'both' : sendingNow ? 'out' : receivingNow ? 'in' : null;
 
   if (joining && socket) {
     return (
@@ -815,7 +901,7 @@ export default function RoomPage() {
                 peerVisible={peerVisible}
                 peerReveal={peerReveal}
                 connected={connected}
-                connectionState={connectionState}
+                flow={radarFlow}
                 deviceName={deviceName}
                 deviceInfo={deviceInfo}
                 YouIcon={YouIcon}
@@ -823,8 +909,8 @@ export default function RoomPage() {
                 onKickPeer={handleKickPeer}
               />
 
-              <div className="mt-5 space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-1 border-b border-slate-100 pb-3 dark:border-surface-border">
+              <div className="mt-5 divide-y divide-slate-100 rounded-xl border border-slate-200 dark:divide-white/[0.06] dark:border-surface-border">
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
                   <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Data channel</span>
                   <span
                     className={`text-[12px] font-semibold sm:text-[13px] ${
@@ -842,15 +928,15 @@ export default function RoomPage() {
                       : 'Waiting'}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-1">
-                  <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Room created</span>
-                  <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[13px]">
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Created</span>
+                  <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[12px]">
                     {expiresAt ? formatLocalDateTime(expiresAt - 30 * 60 * 1000) : '--'}
                   </span>
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-1">
-                  <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Expires at</span>
-                  <span className="font-mono text-[12px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[13px]">
+                <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <span className="text-[12px] text-slate-500 dark:text-slate-400 sm:text-[13px]">Expires</span>
+                  <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[12px]">
                     {expiresAt ? formatLocalDateTime(expiresAt) : '--'}
                   </span>
                 </div>
@@ -931,11 +1017,12 @@ export default function RoomPage() {
                 e.preventDefault();
                 setIsDragging(false);
               }}
-              onDrop={(e) => {
+              onDrop={async (e) => {
                 e.preventDefault();
                 setIsDragging(false);
                 if (connectionState !== 'connected') return;
-                handleFilesSelected(e.dataTransfer?.files);
+                const files = await collectDroppedFiles(e.dataTransfer);
+                handleFilesSelected(files);
               }}
               className={`relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed p-6 text-center transition-all duration-300 sm:p-10 lg:p-14 ${
                 isDragging
@@ -1019,7 +1106,7 @@ export default function RoomPage() {
                     </button>
                   </div>
                   <p className="relative mt-5 px-2 text-[10px] font-medium leading-relaxed tracking-wide text-slate-400 dark:text-slate-600 sm:mt-6 sm:text-[11px]">
-                    16 KB CHUNKS · BACKPRESSURE ENABLED · NO SIZE LIMIT
+                    64 KB CHUNKS · BACKPRESSURE ENABLED · NO SIZE LIMIT
                   </p>
                 </>
               )}
@@ -1038,12 +1125,12 @@ export default function RoomPage() {
                 id="folder-input"
                 type="file"
                 multiple
-                webkitdirectory=""
-                directory=""
+                ref={setFolderAttrs}
                 className="hidden"
                 onChange={(e) => {
-                  handleFilesSelected(e.target.files);
+                  const files = collectInputFiles(e.target.files);
                   e.target.value = '';
+                  handleFilesSelected(files);
                 }}
               />
             </div>
@@ -1194,6 +1281,7 @@ function FileRow({
   const isCancelled = file.status === 'cancelled';
   const isWaiting = file.status === 'waiting';
   const isTransferring = file.status === 'transferring';
+  const isQueued = file.status === 'queued';
 
   useEffect(() => {
     if (isCompleted && !notifiedRef.current) {
@@ -1205,7 +1293,7 @@ function FileRow({
 
   const canDownload = isIncoming && isCompleted && file.blob;
   const canCancel =
-    (isIncoming && isReceiving) || (!isIncoming && (isWaiting || isTransferring));
+    (isIncoming && isReceiving) || (!isIncoming && (isWaiting || isTransferring || isQueued));
   const canRetry = !isIncoming && isFailed && Boolean(onRetry);
   const cancelLabel = isIncoming ? 'Cancel receiving' : 'Cancel transfer';
   const hasActionsRow = canDownload || canRetry || isPending || canCancel;
@@ -1228,6 +1316,7 @@ function FileRow({
     if (isRejected) return 'Rejected';
     if (isCancelled) return 'Cancelled';
     if (isPending) return isIncoming ? 'Incoming — waiting for you' : 'Waiting for response';
+    if (isQueued) return 'Queued — waiting for connection';
     if (isWaiting) return 'Waiting for accept…';
     if (isActive) return `${progress.toFixed(1)}%`;
     return 'Ready';
@@ -1237,13 +1326,13 @@ function FileRow({
     ? 'text-emerald-600 dark:text-emerald-400'
     : isFailed || isRejected || isCancelled
     ? 'text-red-500 dark:text-red-400'
-    : isPending || isWaiting
+    : isPending || isWaiting || isQueued
     ? 'text-amber-600 dark:text-amber-400'
     : 'text-slate-500 dark:text-slate-400';
 
   const TypeIcon = getFileTypeIcon(file.mimeType);
 
-  const isActiveOrPending = isPending || isWaiting || isTransferring || isReceiving;
+  const isActiveOrPending = isPending || isWaiting || isQueued || isTransferring || isReceiving;
 
   const handleRemove = () => {
     // For anything still in flight or awaiting a response, the X must actually
