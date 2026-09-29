@@ -1,3 +1,4 @@
+// src/hooks/useFileTransfer.js
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FILE_CHUNK_SIZE,
@@ -5,46 +6,92 @@ import {
   BUFFER_HIGH_WATERMARK,
   BUFFER_LOW_WATERMARK,
 } from '../utils/constants';
-import { generateFileId, downloadBlob, validateFile } from '../utils/fileUtils';
+import { downloadBlob, validateFile } from '../utils/fileUtils';
 
-function makeSpeedTracker() {
-  let lastBytes = 0;
-  let lastTime = Date.now();
-  let smoothed = 0;
+const ACCEPT_TIMEOUT_MS = 5 * 60 * 1000;
+const ACK_INTERVAL_MS = 200;
+const RECV_UI_INTERVAL_MS = 125;
+const SEND_UI_INTERVAL_MS = 200;
+
+// Adaptive backpressure: keep at most ~0.5s worth of data queued on the
+// channel. Slow link -> small backlog -> control messages (offer/cancel)
+// are never stuck behind seconds of stale data. Fast link -> window grows
+// up to BUFFER_HIGH_WATERMARK, so throughput is not capped.
+const MIN_WINDOW_BYTES = 256 * 1024;
+const TARGET_BACKLOG_SEC = 0.5;
+
+function getWindowBytes(speedBytesPerSec) {
+  const wanted = (speedBytesPerSec || 0) * TARGET_BACKLOG_SEC;
+  return Math.min(BUFFER_HIGH_WATERMARK, Math.max(MIN_WINDOW_BYTES, wanted));
+}
+
+/* ============================================================
+   HELPERS (module level — no React state)
+============================================================ */
+
+// Every transfer gets its own unique id (this is the "transferId").
+let transferCounter = 0;
+function makeTransferId() {
+  try {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+  } catch {}
+  transferCounter += 1;
+  return `t-${Date.now().toString(36)}-${transferCounter}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+}
+
+/**
+ * Real throughput = bytes moved / elapsed time over a rolling window.
+ * Never derived from FILE_CHUNK_SIZE or from a single chunk.
+ */
+function makeSpeedTracker(windowMs = 2000, minSampleMs = 100) {
+  const samples = [{ t: performance.now(), b: 0 }];
+  let speed = 0;
 
   return {
-    update(currentBytes) {
-      const now = Date.now();
-      const dt = (now - lastTime) / 1000;
-      if (dt < 0.15) return smoothed;
+    update(bytes) {
+      const now = performance.now();
+      const last = samples[samples.length - 1];
+      if (now - last.t < minSampleMs) return speed;
 
-      const dBytes = currentBytes - lastBytes;
-      const instant = dBytes / dt;
-      smoothed = smoothed === 0 ? instant : smoothed * 0.7 + instant * 0.3;
+      samples.push({ t: now, b: bytes });
 
-      lastBytes = currentBytes;
-      lastTime = now;
-      return smoothed;
-    },
-    reset() {
-      lastBytes = 0;
-      lastTime = Date.now();
-      smoothed = 0;
+      const cutoff = now - windowMs;
+      while (samples.length > 2 && samples[1].t <= cutoff) samples.shift();
+
+      const first = samples[0];
+      const dt = (now - first.t) / 1000;
+      speed = dt > 0 ? Math.max(0, (bytes - first.b) / dt) : 0;
+      return speed;
     },
     get() {
-      return smoothed;
+      return speed;
     },
   };
 }
 
+function safeSend(dc, payload) {
+  if (!dc || dc.readyState !== 'open') return false;
+  try {
+    dc.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
+    return true;
+  } catch (err) {
+    console.warn('[transfer] send failed:', err);
+    return false;
+  }
+}
+
 /**
- * Buffer BUFFER_LOW_WATERMARK tak khali hone ka intezaar karta hai.
- * Polling ki jagah 'bufferedamountlow' event use hota hai, taaki
- * buffer khali hote hi sender turant dobara chal pade (koi 50ms ka gap nahi).
+ * Backpressure wait. Wakes on: buffer drained below `low` (event, not
+ * polling), channel close, OR the transfer being aborted.
+ * The 1 s timer is only a safety net; the caller re-checks bufferedAmount.
  */
-function waitForDrain(dc) {
+function waitForDrain(dc, signal, low) {
   return new Promise((resolve) => {
-    if (dc.readyState !== 'open' || dc.bufferedAmount <= BUFFER_LOW_WATERMARK) {
+    if (signal.aborted || dc.readyState !== 'open' || dc.bufferedAmount <= low) {
       resolve();
       return;
     }
@@ -53,31 +100,106 @@ function waitForDrain(dc) {
     const done = () => {
       dc.removeEventListener('bufferedamountlow', done);
       dc.removeEventListener('close', done);
+      signal.removeEventListener('abort', done);
       clearTimeout(timer);
       resolve();
     };
 
     dc.addEventListener('bufferedamountlow', done);
     dc.addEventListener('close', done);
-    timer = setTimeout(done, 1000); // safety net
+    signal.addEventListener('abort', done);
+    timer = setTimeout(done, 1000);
   });
 }
 
-/** Sab data network par nikal jaye (bufferedAmount == 0) tab tak ruko */
-function waitForEmpty(dc) {
+/** Wait until everything has left the buffer — abortable. */
+function waitForEmpty(dc, signal) {
   return new Promise((resolve) => {
-    const check = () => {
-      if (dc.readyState !== 'open' || dc.bufferedAmount === 0) resolve();
-      else setTimeout(check, 50);
+    let timer;
+    const done = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', done);
+      resolve();
     };
+    const check = () => {
+      if (signal.aborted || dc.readyState !== 'open' || dc.bufferedAmount === 0) {
+        done();
+      } else {
+        timer = setTimeout(check, 50);
+      }
+    };
+    signal.addEventListener('abort', done);
     check();
   });
 }
 
+function readBlock(file, start, total) {
+  const end = Math.min(start + FILE_READ_BLOCK_SIZE, total);
+  const p = file.slice(start, end).arrayBuffer();
+  p.catch(() => {}); // avoid unhandled rejection if we abort before awaiting it
+  return p;
+}
+
+function makeJob(file, meta) {
+  return {
+    file,
+    meta,
+    controller: new AbortController(),
+    cancelReason: null, // null | 'local' | 'receiver' | 'disconnected'
+    stage: 'idle', // 'idle' | 'offered' | 'streaming'
+    resolveDecision: null,
+    decisionTimer: null,
+  };
+}
+
+/** Cancel one transfer: aborts every wait it may be blocked on. */
+function cancelJob(job, reason) {
+  if (!job || job.cancelReason) return;
+  job.cancelReason = reason;
+  job.controller.abort();
+  if (job.resolveDecision) {
+    job.resolveDecision(reason === 'disconnected' ? 'disconnected' : 'cancelled');
+  }
+}
+
+function waitForDecision(job) {
+  return new Promise((resolve) => {
+    if (job.cancelReason) {
+      resolve(job.cancelReason === 'disconnected' ? 'disconnected' : 'cancelled');
+      return;
+    }
+    job.stage = 'offered';
+    job.resolveDecision = (decision) => {
+      clearTimeout(job.decisionTimer);
+      job.decisionTimer = null;
+      job.resolveDecision = null;
+      resolve(decision);
+    };
+    job.decisionTimer = setTimeout(() => {
+      if (job.resolveDecision) job.resolveDecision('timeout');
+    }, ACCEPT_TIMEOUT_MS);
+  });
+}
+
+function applyPatch(list, id, patch, onlyFrom) {
+  return list.map((f) => {
+    if (f.fileId !== id || f.status === 'completed') return f;
+    if (onlyFrom && !onlyFrom.includes(f.status)) return f;
+    return { ...f, ...patch };
+  });
+}
+
+/* ============================================================
+   HOOK
+============================================================ */
+
 /**
- * `dataChannelOpen` (from useWebRTC) is accepted so this hook knows the
- * moment the connection comes back and can automatically flush anything
- * that was queued while it was down.
+ * Transfer lifecycle (all per-transfer, keyed by a unique fileId/transferId):
+ *
+ *  Sender job:   offer -> (accept | reject | cancel | timeout) -> stream -> complete
+ *  Receiver:     offer (pending) -> accept -> file-start -> chunks -> file-complete
+ *
+ * Nothing here ever touches the RTCPeerConnection / DataChannel lifecycle.
  */
 export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   const [outgoing, setOutgoing] = useState([]);
@@ -92,65 +214,281 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
     incomingRef.current = incoming;
   }, [incoming]);
 
-  const incomingBuffers = useRef(new Map());
-  const receiveOrder = useRef([]);
-  const acceptResolversRef = useRef(new Map());
-  const cancelledRef = useRef(new Set());
-  const lastAckSentRef = useRef(0);
-  const lastUiUpdateRef = useRef(0);
-  const lastRecvUiUpdateRef = useRef(0);
+  // Always call the latest getDataChannel without re-creating callbacks.
+  const getDcRef = useRef(getDataChannel);
+  getDcRef.current = getDataChannel;
+  const getDc = useCallback(() => getDcRef.current?.() ?? null, []);
 
-  // Sender side: speed ab receiver ke ACK (file-progress) se nikalti hai,
-  // buffer me daali gayi bytes se nahi. Isliye speed/ETA asli dikhte hain.
-  const sendSpeedTrackers = useRef(new Map());
-  const recvSpeedTrackers = useRef(new Map());
-  const retryFileRef = useRef(new Map());
-
-  const pendingFilesRef = useRef([]);
+  // ---- Sender-side state (per transfer) ----
+  const jobsRef = useRef(new Map()); // fileId -> job
+  const pendingFilesRef = useRef([]); // queued while channel is down
   const flushingRef = useRef(false);
+  const retryFileRef = useRef(new Map()); // fileId -> File
+  const sendSpeedTrackers = useRef(new Map());
+  const streamChainRef = useRef(Promise.resolve()); // one stream at a time
+
+  // ---- Receiver-side state ----
+  const acceptedRef = useRef(new Set()); // ids the user accepted (gate for file-start)
+  const activeRecvRef = useRef(null); // { id, size, mimeType, chunks, received, ... }
+
+  const patchOutgoing = useCallback((id, patch, onlyFrom) => {
+    setOutgoing((prev) => applyPatch(prev, id, patch, onlyFrom));
+  }, []);
+
+  const patchIncoming = useCallback((id, patch, onlyFrom) => {
+    setIncoming((prev) => applyPatch(prev, id, patch, onlyFrom));
+  }, []);
 
   /* ============================================================
-     SEND ONE FILE'S OFFER, WAIT FOR ACCEPT, THEN STREAM IT
+     SENDER
   ============================================================ */
-  const offerAndSend = async (dc, file, meta) => {
-    dc.send(
-      JSON.stringify({
-        type: 'file-offer',
-        files: [meta],
-      })
-    );
 
-    const result = await new Promise((resolve) => {
-      acceptResolversRef.current.set(meta.fileId, resolve);
+  const requeueJob = useCallback(
+    (job) => {
+      const { meta, file } = job;
+      if (!pendingFilesRef.current.some((i) => i.meta.fileId === meta.fileId)) {
+        pendingFilesRef.current.push({ file, meta });
+      }
+      patchOutgoing(meta.fileId, {
+        status: 'queued',
+        bytesSent: 0,
+        bytesReceived: 0,
+        speed: 0,
+      });
+    },
+    [patchOutgoing]
+  );
 
-      setTimeout(() => {
-        if (acceptResolversRef.current.has(meta.fileId)) {
-          acceptResolversRef.current.delete(meta.fileId);
-          resolve('timeout');
+  // Called when a job stopped because of cancel / disconnect.
+  const settleStopped = useCallback(
+    (job) => {
+      const id = job.meta.fileId;
+      if (job.cancelReason === 'disconnected') {
+        requeueJob(job);
+      } else {
+        patchOutgoing(id, { status: 'cancelled', speed: 0 });
+        retryFileRef.current.delete(id);
+      }
+    },
+    [requeueJob, patchOutgoing]
+  );
+
+  const runExclusive = useCallback((fn) => {
+    const run = streamChainRef.current.then(() => fn());
+    streamChainRef.current = run.catch(() => {});
+    return run;
+  }, []);
+
+  /**
+   * Streams one file. Every wait inside is abortable through job.controller,
+   * so cancellation can never leave this function stuck.
+   */
+  const streamFile = useCallback(
+    async (job) => {
+      const { file, meta, controller } = job;
+      const id = meta.fileId;
+      const dc = getDc();
+
+      if (job.cancelReason) {
+        settleStopped(job);
+        return;
+      }
+      if (!dc || dc.readyState !== 'open') {
+        job.cancelReason = 'disconnected';
+        settleStopped(job);
+        return;
+      }
+
+      job.stage = 'streaming';
+      patchOutgoing(id, {
+        status: 'transferring',
+        bytesSent: 0,
+        bytesReceived: 0,
+        speed: 0,
+      });
+
+      const tracker = makeSpeedTracker();
+      sendSpeedTrackers.current.set(id, tracker);
+      const startedAt = performance.now();
+
+      // Adaptive window (see getWindowBytes)
+      let high = MIN_WINDOW_BYTES;
+      let low = Math.min(BUFFER_LOW_WATERMARK, Math.floor(high / 2));
+      dc.bufferedAmountLowThreshold = low;
+
+      if (!safeSend(dc, { type: 'file-start', ...meta })) {
+        job.cancelReason = 'disconnected';
+        settleStopped(job);
+        return;
+      }
+
+      const total = file.size;
+
+      const stopped = () => {
+        if (job.cancelReason) return true;
+        if (dc.readyState !== 'open') {
+          job.cancelReason = 'disconnected';
+          return true;
         }
-      }, 300000);
-    });
+        return false;
+      };
 
-    if (result !== 'accepted') {
-      setOutgoing((prev) =>
-        prev.map((f) =>
-          f.fileId === meta.fileId
-            ? {
-                ...f,
-                status: result === 'cancelled' ? 'cancelled' : 'rejected',
-              }
-            : f
-        )
-      );
-      return;
-    }
+      try {
+        let offset = 0;
+        let lastUi = 0;
+        // Prefetch: next block is read from disk while this one is being sent.
+        let pendingBlock = total > 0 ? readBlock(file, 0, total) : null;
 
-    await sendSingleFile(dc, file, meta);
-  };
+        while (offset < total) {
+          if (stopped()) break;
 
-  /* ============================================================
-     SEND — sequential, streamed
-  ============================================================ */
+          const blockEnd = Math.min(offset + FILE_READ_BLOCK_SIZE, total);
+          const block = await pendingBlock;
+          if (stopped()) break;
+
+          pendingBlock = blockEnd < total ? readBlock(file, blockEnd, total) : null;
+
+          for (let i = 0; i < block.byteLength; i += FILE_CHUNK_SIZE) {
+            if (stopped()) break;
+
+            // Window follows the measured delivery speed.
+            high = getWindowBytes(tracker.get());
+            low = Math.min(BUFFER_LOW_WATERMARK, Math.floor(high / 2));
+
+            // Wait ONLY when the buffer is really too full.
+            while (dc.bufferedAmount > high) {
+              dc.bufferedAmountLowThreshold = low;
+              await waitForDrain(dc, controller.signal, low);
+              if (stopped()) break;
+              high = getWindowBytes(tracker.get());
+              low = Math.min(BUFFER_LOW_WATERMARK, Math.floor(high / 2));
+            }
+            if (stopped()) break;
+
+            const len = Math.min(FILE_CHUNK_SIZE, block.byteLength - i);
+            dc.send(new Uint8Array(block, i, len));
+
+            const now = Date.now();
+            if (now - lastUi > SEND_UI_INTERVAL_MS) {
+              lastUi = now;
+              const sent = offset + i + len;
+              patchOutgoing(id, { bytesSent: sent }, ['transferring']);
+            }
+          }
+
+          if (stopped()) break;
+          offset = blockEnd;
+        }
+
+        if (stopped()) {
+          settleStopped(job);
+          return;
+        }
+
+        safeSend(dc, { type: 'file-complete', fileId: id });
+        await waitForEmpty(dc, controller.signal);
+
+        if (job.cancelReason) {
+          settleStopped(job);
+          return;
+        }
+
+        if (dc.readyState !== 'open' && dc.bufferedAmount > 0) {
+          patchOutgoing(id, { status: 'failed', speed: 0 });
+          return;
+        }
+
+        const secs = Math.max((performance.now() - startedAt) / 1000, 0.001);
+        console.log(
+          `[send] ${meta.name}: ${(total / 1048576).toFixed(1)} MB in ${secs.toFixed(
+            1
+          )}s = ${(total / 1048576 / secs).toFixed(2)} MB/s`
+        );
+
+        patchOutgoing(id, {
+          status: 'completed',
+          bytesSent: total,
+          bytesReceived: total,
+          progress: 100,
+          speed: 0,
+        });
+        retryFileRef.current.delete(id);
+      } catch (err) {
+        console.error('[send] stream error:', err);
+        if (dc.readyState !== 'open') {
+          job.cancelReason = job.cancelReason || 'disconnected';
+          settleStopped(job);
+          return;
+        }
+        safeSend(dc, { type: 'file-cancel', fileId: id }); // let receiver clean up
+        patchOutgoing(id, { status: 'failed', speed: 0 });
+      }
+    },
+    [getDc, patchOutgoing, settleStopped]
+  );
+
+  /** offer -> wait for decision -> stream. Always cleans up its own state. */
+  const runJob = useCallback(
+    async (job) => {
+      const { meta } = job;
+      const id = meta.fileId;
+      jobsRef.current.set(id, job);
+
+      try {
+        const dc = getDc();
+        if (!dc || dc.readyState !== 'open') {
+          requeueJob(job);
+          return;
+        }
+
+        patchOutgoing(id, {
+          status: 'waiting',
+          bytesSent: 0,
+          bytesReceived: 0,
+          speed: 0,
+        });
+
+        if (!safeSend(dc, { type: 'file-offer', files: [meta] })) {
+          requeueJob(job);
+          return;
+        }
+
+        const decision = await waitForDecision(job);
+
+        if (decision === 'accepted') {
+          await runExclusive(() => streamFile(job));
+          return;
+        }
+
+        if (decision === 'rejected') {
+          patchOutgoing(id, { status: 'rejected', speed: 0 });
+          retryFileRef.current.delete(id);
+          return;
+        }
+
+        if (decision === 'timeout') {
+          safeSend(getDc(), { type: 'file-cancel', fileId: id });
+          patchOutgoing(id, { status: 'failed', speed: 0 });
+          return;
+        }
+
+        // 'cancelled' | 'disconnected'
+        settleStopped(job);
+      } catch (err) {
+        console.error('[send] transfer error:', err);
+        safeSend(getDc(), { type: 'file-cancel', fileId: id });
+        patchOutgoing(id, { status: 'failed', speed: 0 });
+      } finally {
+        if (job.decisionTimer) clearTimeout(job.decisionTimer);
+        job.decisionTimer = null;
+        job.resolveDecision = null;
+        jobsRef.current.delete(id);
+        sendSpeedTrackers.current.delete(id);
+      }
+    },
+    [getDc, patchOutgoing, requeueJob, settleStopped, runExclusive, streamFile]
+  );
+
   const sendFiles = useCallback(
     async (files) => {
       const valid = [];
@@ -163,7 +501,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
 
       for (const file of valid) {
         const meta = {
-          fileId: generateFileId(),
+          fileId: makeTransferId(),
           name: file.name,
           size: file.size,
           mimeType: file.type || 'application/octet-stream',
@@ -171,7 +509,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
 
         retryFileRef.current.set(meta.fileId, file);
 
-        const dc = getDataChannel();
+        const dc = getDc();
         const isOpen = Boolean(dc) && dc.readyState === 'open';
 
         setOutgoing((prev) => [
@@ -180,6 +518,7 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
             ...meta,
             progress: 0,
             bytesSent: 0,
+            bytesReceived: 0,
             speed: 0,
             status: isOpen ? 'waiting' : 'queued',
             direction: 'out',
@@ -187,55 +526,37 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
         ]);
 
         if (!isOpen) {
-          console.warn(
-            '[send] DataChannel not open yet — queueing file until connection is (re)established'
-          );
+          console.warn('[send] DataChannel not open — queueing until it is (re)established');
           pendingFilesRef.current.push({ file, meta });
           continue;
         }
 
-        await offerAndSend(dc, file, meta);
+        await runJob(makeJob(file, meta));
       }
     },
-    [getDataChannel]
+    [getDc, runJob]
   );
 
-  /* ============================================================
-     FLUSH QUEUED FILES (DataChannel reopen hone par)
-  ============================================================ */
   const flushPendingFiles = useCallback(async () => {
     if (flushingRef.current) return;
-    if (pendingFilesRef.current.length === 0) return;
-
     flushingRef.current = true;
 
-    const queue = pendingFilesRef.current;
-    pendingFilesRef.current = [];
-
     try {
-      for (let i = 0; i < queue.length; i++) {
-        const { file, meta } = queue[i];
-        const dc = getDataChannel();
+      while (pendingFilesRef.current.length > 0) {
+        const dc = getDc();
+        if (!dc || dc.readyState !== 'open') return;
 
-        if (!dc || dc.readyState !== 'open') {
-          pendingFilesRef.current.push(...queue.slice(i));
-          return;
-        }
-
+        const { file, meta } = pendingFilesRef.current.shift();
         console.log('[send] Connection back, resuming queued file:', meta.name);
+        await runJob(makeJob(file, meta));
 
-        setOutgoing((prev) =>
-          prev.map((f) =>
-            f.fileId === meta.fileId ? { ...f, status: 'waiting' } : f
-          )
-        );
-
-        await offerAndSend(dc, file, meta);
+        // Job re-queued itself (peer went away again) — stop until next open.
+        if (pendingFilesRef.current.some((i) => i.meta.fileId === meta.fileId)) return;
       }
     } finally {
       flushingRef.current = false;
     }
-  }, [getDataChannel]);
+  }, [getDc, runJob]);
 
   useEffect(() => {
     if (dataChannelOpen) {
@@ -243,148 +564,23 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
     }
   }, [dataChannelOpen, flushPendingFiles]);
 
-  /**
-   * Fast streaming send:
-   *  - file ko 4 MB ke blocks me padhta hai (har 16 KB ke liye alag read nahi)
-   *  - block ko 64 KB chunks me kaat kar zero-copy view se bhejta hai
-   *  - backpressure: bufferedamountlow event se (polling nahi)
-   *  - speed = receiver ke ACK se (asli speed), buffer se nahi
-   */
-  const sendSingleFile = async (dc, file, meta) => {
-    if (cancelledRef.current.has(meta.fileId)) {
-      try {
-        dc.send(JSON.stringify({ type: 'file-cancel', fileId: meta.fileId }));
-      } catch {}
-      setOutgoing((prev) =>
-        prev.map((f) =>
-          f.fileId === meta.fileId && f.status !== 'completed'
-            ? { ...f, status: 'cancelled', speed: 0 }
-            : f
-        )
-      );
-      return;
-    }
-
-    setOutgoing((prev) =>
-      prev.map((f) =>
-        f.fileId === meta.fileId ? { ...f, status: 'transferring' } : f
-      )
-    );
-
-    dc.bufferedAmountLowThreshold = BUFFER_LOW_WATERMARK;
-    dc.send(JSON.stringify({ type: 'file-start', ...meta }));
-
-    const total = file.size;
-    let offset = 0;
-
-    // ACK-based speed tracker (file-progress handler isko update karta hai)
-    sendSpeedTrackers.current.set(meta.fileId, makeSpeedTracker());
-    lastUiUpdateRef.current = 0;
-
-    // true return kare to loop rok do (cancel / connection drop)
-    const shouldStop = () => {
-      if (cancelledRef.current.has(meta.fileId)) {
-        try {
-          dc.send(JSON.stringify({ type: 'file-cancel', fileId: meta.fileId }));
-        } catch {}
-        sendSpeedTrackers.current.delete(meta.fileId);
-        setOutgoing((prev) =>
-          prev.map((f) =>
-            f.fileId === meta.fileId && f.status !== 'completed'
-              ? { ...f, status: 'cancelled', speed: 0 }
-              : f
-          )
-        );
-        return true;
-      }
-
-      if (dc.readyState !== 'open') {
-        console.warn('[send] DataChannel dropped mid-transfer, re-queueing:', meta.name);
-
-        setOutgoing((prev) =>
-          prev.map((f) =>
-            f.fileId === meta.fileId
-              ? { ...f, status: 'queued', bytesSent: 0, bytesReceived: 0, speed: 0 }
-              : f
-          )
-        );
-
-        pendingFilesRef.current.push({ file, meta });
-        sendSpeedTrackers.current.delete(meta.fileId);
-        return true;
-      }
-
-      return false;
+  // Stop every send loop if the component unmounts.
+  useEffect(() => {
+    const jobs = jobsRef.current;
+    return () => {
+      jobs.forEach((job) => cancelJob(job, 'local'));
     };
-
-    while (offset < total) {
-      if (shouldStop()) return;
-
-      const blockEnd = Math.min(offset + FILE_READ_BLOCK_SIZE, total);
-      const block = await file.slice(offset, blockEnd).arrayBuffer();
-
-      for (let i = 0; i < block.byteLength; i += FILE_CHUNK_SIZE) {
-        if (shouldStop()) return;
-
-        if (dc.bufferedAmount > BUFFER_HIGH_WATERMARK) {
-          await waitForDrain(dc);
-          if (shouldStop()) return;
-        }
-
-        const len = Math.min(FILE_CHUNK_SIZE, block.byteLength - i);
-        dc.send(new Uint8Array(block, i, len));
-
-        // UI update (fallback progress) — ~5 baar per second
-        const now = Date.now();
-        if (now - lastUiUpdateRef.current > 200) {
-          lastUiUpdateRef.current = now;
-          const sent = offset + i + len;
-          setOutgoing((prev) =>
-            prev.map((f) =>
-              f.fileId === meta.fileId ? { ...f, bytesSent: sent } : f
-            )
-          );
-        }
-      }
-
-      offset = blockEnd;
-    }
-
-    dc.send(JSON.stringify({ type: 'file-complete', fileId: meta.fileId }));
-
-    // Sab bytes network par nikalne tak "Sent" mat dikhao
-    await waitForEmpty(dc);
-
-    const dropped = dc.readyState !== 'open' && dc.bufferedAmount > 0;
-
-    setOutgoing((prev) =>
-      prev.map((f) =>
-        f.fileId === meta.fileId
-          ? dropped
-            ? { ...f, status: 'failed', speed: 0 }
-            : {
-                ...f,
-                status: 'completed',
-                bytesSent: total,
-                bytesReceived: total,
-                progress: 100,
-                speed: 0,
-              }
-          : f
-      )
-    );
-
-    sendSpeedTrackers.current.delete(meta.fileId);
-    if (!dropped) retryFileRef.current.delete(meta.fileId);
-  };
+  }, []);
 
   /* ============================================================
-     RECEIVE
+     RECEIVER: message handling
   ============================================================ */
+
   const handleIncomingData = useCallback(
     (event) => {
       const data = event.data;
 
+      /* ---------------- control messages ---------------- */
       if (typeof data === 'string') {
         let msg;
         try {
@@ -392,303 +588,288 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
         } catch {
           return;
         }
+        if (!msg || typeof msg.type !== 'string') return;
 
-        if (msg.type === 'file-offer') {
-          setIncoming((prev) => {
-            const next = [...prev];
+        switch (msg.type) {
+          // ===== receiver side =====
+          case 'file-offer': {
+            if (!Array.isArray(msg.files)) return;
 
             for (const f of msg.files) {
-              const idx = next.findIndex((x) => x.fileId === f.fileId);
-
-              const entry = {
-                ...f,
-                progress: 0,
-                bytesReceived: 0,
-                speed: 0,
-                status: 'pending',
-                direction: 'in',
-              };
-
-              if (idx >= 0) {
-                next[idx] = entry;
-              } else {
-                next.push(entry);
-              }
+              if (!f || typeof f.fileId !== 'string') continue;
+              // A fresh offer always starts from a clean slate for that id.
+              acceptedRef.current.delete(f.fileId);
+              if (activeRecvRef.current?.id === f.fileId) activeRecvRef.current = null;
             }
 
-            return next;
-          });
-          return;
-        }
+            setIncoming((prev) => {
+              const next = [...prev];
+              for (const f of msg.files) {
+                if (!f || typeof f.fileId !== 'string') continue;
+                const idx = next.findIndex((x) => x.fileId === f.fileId);
+                const entry = {
+                  ...f,
+                  progress: 0,
+                  bytesReceived: 0,
+                  speed: 0,
+                  status: 'pending',
+                  direction: 'in',
+                };
+                if (idx >= 0) next[idx] = entry;
+                else next.push(entry);
+              }
+              return next;
+            });
+            return;
+          }
 
-        // Receiver ka ACK -> sender ki asli progress + asli speed
-        if (msg.type === 'file-progress') {
-          const { fileId, received } = msg;
-          const tracker = sendSpeedTrackers.current.get(fileId);
-          const speed = tracker ? tracker.update(received) : 0;
+          case 'file-start': {
+            const id = msg.fileId;
+            // Ignore file-start for anything the user did not accept
+            // (cancelled / rejected / stale) — prevents zombie transfers.
+            if (!acceptedRef.current.has(id)) return;
 
-          setOutgoing((prev) =>
-            prev.map((f) => {
-              if (f.fileId !== fileId) return f;
-              return f.status === 'transferring'
-                ? { ...f, bytesReceived: received, speed }
-                : { ...f, bytesReceived: received };
-            })
-          );
-          return;
-        }
+            const prev = activeRecvRef.current;
+            if (prev && prev.id !== id) {
+              patchIncoming(prev.id, { status: 'failed', speed: 0 }, ['receiving']);
+            }
 
-        if (msg.type === 'file-start') {
-          incomingBuffers.current.set(msg.fileId, {
-            meta: msg,
-            chunks: [],
-            received: 0,
-          });
-          receiveOrder.current.push(msg.fileId);
-          recvSpeedTrackers.current.set(msg.fileId, makeSpeedTracker());
+            activeRecvRef.current = {
+              id,
+              size: Number(msg.size),
+              mimeType: msg.mimeType || 'application/octet-stream',
+              chunks: [],
+              received: 0,
+              lastUi: 0,
+              lastAck: 0,
+              tracker: makeSpeedTracker(),
+            };
 
-          setIncoming((prev) =>
-            prev.map((f) =>
-              f.fileId === msg.fileId ? { ...f, status: 'receiving' } : f
-            )
-          );
-          return;
-        }
+            patchIncoming(id, { status: 'receiving', bytesReceived: 0, speed: 0 }, [
+              'pending',
+              'receiving',
+            ]);
+            return;
+          }
 
-        if (msg.type === 'file-complete') {
-          const entry = incomingBuffers.current.get(msg.fileId);
-          if (!entry) return;
+          case 'file-complete': {
+            const active = activeRecvRef.current;
+            if (!active || active.id !== msg.fileId) return; // stale / cancelled
 
-          const blob = new Blob(entry.chunks, {
-            type: entry.meta.mimeType || 'application/octet-stream',
-          });
+            activeRecvRef.current = null;
+            acceptedRef.current.delete(active.id);
 
-          setIncoming((prev) =>
-            prev.map((f) =>
-              f.fileId === msg.fileId
-                ? {
-                    ...f,
-                    status: 'completed',
-                    blob,
-                    progress: 100,
-                    bytesReceived: entry.meta.size,
-                    speed: 0,
-                  }
-                : f
-            )
-          );
+            if (Number.isFinite(active.size) && active.received !== active.size) {
+              console.error('[recv] size mismatch', active.received, active.size);
+              patchIncoming(active.id, { status: 'failed', speed: 0 });
+              return;
+            }
 
-          incomingBuffers.current.delete(msg.fileId);
-          receiveOrder.current = receiveOrder.current.filter(
-            (id) => id !== msg.fileId
-          );
-          recvSpeedTrackers.current.delete(msg.fileId);
-          return;
-        }
+            const blob = new Blob(active.chunks, { type: active.mimeType });
+            active.chunks = [];
 
-        if (msg.type === 'file-cancel') {
-          const { fileId } = msg;
-          incomingBuffers.current.delete(fileId);
-          receiveOrder.current = receiveOrder.current.filter(
-            (id) => id !== fileId
-          );
-          recvSpeedTrackers.current.delete(fileId);
-          setIncoming((prev) =>
-            prev.map((f) =>
-              f.fileId === fileId && f.status !== 'completed'
-                ? { ...f, status: 'cancelled', speed: 0 }
-                : f
-            )
-          );
-          return;
-        }
+            patchIncoming(active.id, {
+              status: 'completed',
+              blob,
+              progress: 100,
+              bytesReceived: active.received,
+              speed: 0,
+            });
+            return;
+          }
 
-        if (msg.type === 'file-cancel-by-receiver') {
-          const { fileId } = msg;
-          cancelledRef.current.add(fileId);
-          setOutgoing((prev) =>
-            prev.map((f) =>
-              f.fileId === fileId ? { ...f, status: 'cancelled' } : f
-            )
-          );
-          return;
-        }
-        return;
-      }
+          case 'file-cancel': {
+            // Sender cancelled this transfer.
+            const id = msg.fileId;
+            acceptedRef.current.delete(id);
+            if (activeRecvRef.current?.id === id) activeRecvRef.current = null;
+            patchIncoming(id, { status: 'cancelled', speed: 0 });
+            return;
+          }
 
-      // Binary chunk — hamesha receive order ki pehli file me jodo
-      const nextFileId = receiveOrder.current[0];
-      if (!nextFileId) return;
+          // ===== sender side =====
+          case 'file-accept': {
+            const job = jobsRef.current.get(msg.fileId);
+            if (job && job.stage === 'offered' && job.resolveDecision) {
+              job.resolveDecision('accepted');
+            }
+            return;
+          }
 
-      const entry = incomingBuffers.current.get(nextFileId);
-      if (!entry) {
-        receiveOrder.current.shift();
-        return;
-      }
+          case 'file-reject': {
+            const job = jobsRef.current.get(msg.fileId);
+            if (job && job.stage === 'offered' && job.resolveDecision) {
+              job.resolveDecision('rejected');
+            }
+            return;
+          }
 
-      const chunk = data instanceof ArrayBuffer ? data : new Uint8Array(data).buffer;
-      entry.chunks.push(chunk);
-      entry.received += chunk.byteLength;
+          case 'file-cancel-by-receiver': {
+            const job = jobsRef.current.get(msg.fileId);
+            if (!job) return; // already finished — nothing to do
+            cancelJob(job, 'receiver'); // breaks accept-wait / backpressure wait / send loop
+            sendSpeedTrackers.current.delete(msg.fileId);
+            patchOutgoing(msg.fileId, { status: 'cancelled', speed: 0 }, [
+              'waiting',
+              'queued',
+              'transferring',
+            ]);
+            return;
+          }
 
-      const tracker = recvSpeedTrackers.current.get(nextFileId);
-      const speed = tracker ? tracker.update(entry.received) : 0;
-
-      const now = Date.now();
-      const isLastChunk = entry.received >= entry.meta.size;
-      if (now - lastRecvUiUpdateRef.current > 125 || isLastChunk) {
-        lastRecvUiUpdateRef.current = now;
-        setIncoming((prev) =>
-          prev.map((f) =>
-            f.fileId === nextFileId
-              ? { ...f, bytesReceived: entry.received, speed }
-              : f
-          )
-        );
-      }
-
-      // ACK sender ko (~5 baar per second) — sender isi se apni speed nikalta hai
-      if (now - lastAckSentRef.current > 200) {
-        lastAckSentRef.current = now;
-        const dc = getDataChannel();
-        if (dc && dc.readyState === 'open') {
-          try {
-            dc.send(
-              JSON.stringify({
-                type: 'file-progress',
-                fileId: nextFileId,
-                received: entry.received,
-              })
+          case 'file-progress': {
+            const tracker = sendSpeedTrackers.current.get(msg.fileId);
+            if (!tracker) return; // stale ACK from a finished/cancelled transfer
+            const received = Number(msg.received) || 0;
+            const speed = tracker.update(received);
+            setOutgoing((prev) =>
+              prev.map((f) =>
+                f.fileId === msg.fileId && f.status === 'transferring'
+                  ? { ...f, bytesReceived: received, speed }
+                  : f
+              )
             );
-          } catch {}
+            return;
+          }
+
+          default:
+            return;
         }
+      }
+
+      /* ---------------- binary chunk ---------------- */
+      // Chunks belong to the single active transfer. If there is none
+      // (cancelled / stale), they are simply dropped.
+      const active = activeRecvRef.current;
+      if (!active) return;
+
+      let chunk;
+      if (data instanceof ArrayBuffer) {
+        chunk = data;
+      } else if (ArrayBuffer.isView(data)) {
+        chunk = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      } else {
+        return;
+      }
+
+      active.chunks.push(chunk);
+      active.received += chunk.byteLength;
+
+      if (Number.isFinite(active.size) && active.received > active.size) {
+        // Protocol violation — abort this transfer only.
+        const id = active.id;
+        activeRecvRef.current = null;
+        acceptedRef.current.delete(id);
+        safeSend(getDc(), { type: 'file-cancel-by-receiver', fileId: id });
+        patchIncoming(id, { status: 'failed', speed: 0 });
+        return;
+      }
+
+      const speed = active.tracker.update(active.received);
+      const now = Date.now();
+      const isLast = Number.isFinite(active.size) && active.received >= active.size;
+
+      if (now - active.lastUi > RECV_UI_INTERVAL_MS || isLast) {
+        active.lastUi = now;
+        patchIncoming(active.id, { bytesReceived: active.received, speed }, ['receiving']);
+      }
+
+      // ACK to sender (~5/s) — sender derives its real speed from this.
+      if (now - active.lastAck > ACK_INTERVAL_MS) {
+        active.lastAck = now;
+        safeSend(getDc(), {
+          type: 'file-progress',
+          fileId: active.id,
+          received: active.received,
+        });
       }
     },
-    [getDataChannel]
+    [getDc, patchIncoming, patchOutgoing]
   );
 
   /* ============================================================
-     Accept / Reject
+     Accept / Reject / Cancel (receiver actions)
   ============================================================ */
+
   const acceptOffer = useCallback(
     (fileId) => {
-      const dc = getDataChannel();
+      const dc = getDc();
       if (!dc || dc.readyState !== 'open') return;
-      dc.send(JSON.stringify({ type: 'file-accept', fileId }));
-      setIncoming((prev) =>
-        prev.map((f) =>
-          f.fileId === fileId ? { ...f, status: 'receiving' } : f
-        )
-      );
+
+      acceptedRef.current.add(fileId);
+      if (!safeSend(dc, { type: 'file-accept', fileId })) {
+        acceptedRef.current.delete(fileId);
+        return;
+      }
+      patchIncoming(fileId, { status: 'receiving', bytesReceived: 0, speed: 0 }, ['pending']);
     },
-    [getDataChannel]
+    [getDc, patchIncoming]
   );
 
   const rejectOffer = useCallback(
     (fileId) => {
-      const dc = getDataChannel();
-      if (!dc || dc.readyState !== 'open') return;
-      dc.send(JSON.stringify({ type: 'file-reject', fileId }));
-      setIncoming((prev) =>
-        prev.map((f) =>
-          f.fileId === fileId ? { ...f, status: 'rejected' } : f
-        )
-      );
+      acceptedRef.current.delete(fileId);
+      safeSend(getDc(), { type: 'file-reject', fileId });
+      patchIncoming(fileId, { status: 'rejected', speed: 0 }, ['pending']);
     },
-    [getDataChannel]
-  );
-
-  /* ============================================================
-     Cancel
-  ============================================================ */
-  const cancelOutgoing = useCallback(
-    (fileId) => {
-      cancelledRef.current.add(fileId);
-      sendSpeedTrackers.current.delete(fileId);
-
-      pendingFilesRef.current = pendingFilesRef.current.filter(
-        (item) => item.meta.fileId !== fileId
-      );
-
-      setOutgoing((prev) =>
-        prev.map((f) =>
-          f.fileId === fileId ? { ...f, status: 'cancelled', speed: 0 } : f
-        )
-      );
-
-      const dc = getDataChannel();
-      if (dc && dc.readyState === 'open') {
-        try {
-          dc.send(JSON.stringify({ type: 'file-cancel', fileId }));
-        } catch (err) {
-          console.error('[send] failed to send cancel:', err);
-        }
-      }
-
-      const resolver = acceptResolversRef.current.get(fileId);
-      if (resolver) {
-        resolver('cancelled');
-        acceptResolversRef.current.delete(fileId);
-      }
-    },
-    [getDataChannel]
+    [getDc, patchIncoming]
   );
 
   const cancelIncoming = useCallback(
     (fileId) => {
-      incomingBuffers.current.delete(fileId);
-      receiveOrder.current = receiveOrder.current.filter((id) => id !== fileId);
-      recvSpeedTrackers.current.delete(fileId);
-
-      const dc = getDataChannel();
-      if (dc && dc.readyState === 'open') {
-        try {
-          dc.send(JSON.stringify({ type: 'file-cancel-by-receiver', fileId }));
-        } catch (err) {
-          console.error('[recv] failed to send cancel:', err);
-        }
+      // 1. Stop accepting data for this transfer and drop everything it buffered
+      acceptedRef.current.delete(fileId);
+      if (activeRecvRef.current?.id === fileId) {
+        activeRecvRef.current.chunks = [];
+        activeRecvRef.current = null;
       }
 
-      setIncoming((prev) =>
-        prev.map((f) =>
-          f.fileId === fileId ? { ...f, status: 'cancelled', speed: 0 } : f
-        )
-      );
+      // 2. Tell the sender (channel stays open)
+      safeSend(getDc(), { type: 'file-cancel-by-receiver', fileId });
+
+      // 3. Update UI immediately; receiver is idle again
+      patchIncoming(fileId, { status: 'cancelled', speed: 0, bytesReceived: 0 }, [
+        'pending',
+        'receiving',
+      ]);
     },
-    [getDataChannel]
+    [getDc, patchIncoming]
   );
 
-  const wrappedHandler = useCallback(
-    (event) => {
-      const data = event.data;
-      if (typeof data === 'string') {
-        try {
-          const msg = JSON.parse(data);
-          if (msg.type === 'file-accept') {
-            const resolver = acceptResolversRef.current.get(msg.fileId);
-            if (resolver) {
-              resolver('accepted');
-              acceptResolversRef.current.delete(msg.fileId);
-            }
-            return;
-          }
-          if (msg.type === 'file-reject') {
-            const resolver = acceptResolversRef.current.get(msg.fileId);
-            if (resolver) {
-              resolver('rejected');
-              acceptResolversRef.current.delete(msg.fileId);
-            }
-            return;
-          }
-        } catch {}
+  /* ============================================================
+     Cancel (sender action)
+  ============================================================ */
+
+  const cancelOutgoing = useCallback(
+    (fileId) => {
+      const job = jobsRef.current.get(fileId);
+
+      pendingFilesRef.current = pendingFilesRef.current.filter(
+        (item) => item.meta.fileId !== fileId
+      );
+      retryFileRef.current.delete(fileId);
+      sendSpeedTrackers.current.delete(fileId);
+
+      patchOutgoing(fileId, { status: 'cancelled', speed: 0 }, [
+        'waiting',
+        'queued',
+        'transferring',
+      ]);
+
+      if (job) {
+        // Notify receiver first (ordered after any chunks already sent),
+        // then abort the job so no further chunk is ever sent.
+        safeSend(getDc(), { type: 'file-cancel', fileId });
+        cancelJob(job, 'local');
       }
-      handleIncomingData(event);
     },
-    [handleIncomingData]
+    [getDc, patchOutgoing]
   );
 
   /* ============================================================
      Download
   ============================================================ */
+
   const downloadFile = useCallback(
     (fileId) => {
       const file = incoming.find((f) => f.fileId === fileId);
@@ -701,29 +882,26 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
   /* ============================================================
      Remove / Clear
   ============================================================ */
+
   const removeFile = useCallback(
     (fileId, direction) => {
       if (direction === 'in') {
+        const row = incomingRef.current.find((f) => f.fileId === fileId);
+        if (row?.status === 'pending') rejectOffer(fileId);
+        else if (row?.status === 'receiving') cancelIncoming(fileId);
         setIncoming((prev) => prev.filter((f) => f.fileId !== fileId));
-        incomingBuffers.current.delete(fileId);
-        receiveOrder.current = receiveOrder.current.filter((id) => id !== fileId);
-        recvSpeedTrackers.current.delete(fileId);
       } else {
-        setOutgoing((prev) => {
-          const file = prev.find((f) => f.fileId === fileId);
-          if (file && ['waiting', 'transferring', 'queued'].includes(file.status)) {
-            cancelOutgoing(fileId);
-          }
-          return prev.filter((f) => f.fileId !== fileId);
-        });
-        sendSpeedTrackers.current.delete(fileId);
+        const queued = pendingFilesRef.current.some((i) => i.meta.fileId === fileId);
+        if (jobsRef.current.has(fileId) || queued) cancelOutgoing(fileId);
+        retryFileRef.current.delete(fileId);
+        setOutgoing((prev) => prev.filter((f) => f.fileId !== fileId));
       }
     },
-    [cancelOutgoing]
+    [rejectOffer, cancelIncoming, cancelOutgoing]
   );
 
   const clearAll = useCallback(() => {
-    // Pehle chal rahe / pending transfers ko cancel karo taaki dusri taraf bhi ruk jaye
+    // Cancel running/pending transfers first so the other side stops too
     outgoingRef.current
       .filter((f) => ['waiting', 'queued', 'transferring'].includes(f.status))
       .forEach((f) => cancelOutgoing(f.fileId));
@@ -735,57 +913,29 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
 
     setOutgoing([]);
     setIncoming([]);
-    incomingBuffers.current.clear();
-    receiveOrder.current = [];
-    acceptResolversRef.current.clear();
-    // NOTE: cancelledRef ko clear NAHI karte — sender loop usi se rukta hai
+
+    activeRecvRef.current = null;
+    acceptedRef.current.clear();
     sendSpeedTrackers.current.clear();
-    recvSpeedTrackers.current.clear();
     retryFileRef.current.clear();
     pendingFilesRef.current = [];
+    // jobsRef is NOT cleared: aborted jobs remove themselves when they unwind.
   }, [cancelOutgoing, rejectOffer, cancelIncoming]);
 
   const clearCompleted = useCallback(() => {
-    setOutgoing((prev) =>
-      prev.filter(
-        (f) => !['completed', 'rejected', 'cancelled', 'failed'].includes(f.status)
-      )
-    );
-    setIncoming((prev) =>
-      prev.filter(
-        (f) => !['completed', 'rejected', 'cancelled', 'failed'].includes(f.status)
-      )
-    );
+    const done = ['completed', 'rejected', 'cancelled', 'failed'];
+    setOutgoing((prev) => prev.filter((f) => !done.includes(f.status)));
+    setIncoming((prev) => prev.filter((f) => !done.includes(f.status)));
   }, []);
 
   /* ============================================================
      Peer disconnect: outgoing files re-queue, incoming fail
   ============================================================ */
+
   const markPeerDisconnected = useCallback(() => {
-    setOutgoing((prev) =>
-      prev.map((f) => {
-        if (['waiting', 'transferring'].includes(f.status)) {
-          const file = retryFileRef.current.get(f.fileId);
+    // Each running job unwinds through settleStopped -> re-queued (exactly once)
+    jobsRef.current.forEach((job) => cancelJob(job, 'disconnected'));
 
-          if (file) {
-            pendingFilesRef.current.push({
-              file,
-              meta: {
-                fileId: f.fileId,
-                name: f.name,
-                size: f.size,
-                mimeType: f.mimeType,
-              },
-            });
-
-            return { ...f, status: 'queued', bytesSent: 0, bytesReceived: 0, speed: 0 };
-          }
-
-          return { ...f, status: 'failed', speed: 0 };
-        }
-        return f;
-      })
-    );
     setIncoming((prev) =>
       prev.map((f) =>
         ['pending', 'receiving'].includes(f.status)
@@ -793,57 +943,67 @@ export function useFileTransfer({ getDataChannel, dataChannelOpen }) {
           : f
       )
     );
+
+    activeRecvRef.current = null;
+    acceptedRef.current.clear();
     sendSpeedTrackers.current.clear();
-    recvSpeedTrackers.current.clear();
   }, []);
+
+  /* ============================================================
+     Retry (failed outgoing) — always a brand-new transfer id
+  ============================================================ */
 
   const retryFile = useCallback(
     (fileId) => {
-      const dc = getDataChannel();
       const file = retryFileRef.current.get(fileId);
       if (!file) return false;
 
-      cancelledRef.current.delete(fileId);
+      const newId = makeTransferId();
+      retryFileRef.current.delete(fileId);
+      retryFileRef.current.set(newId, file);
 
       const meta = {
-        fileId,
+        fileId: newId,
         name: file.name,
         size: file.size,
         mimeType: file.type || 'application/octet-stream',
       };
 
-      if (!dc || dc.readyState !== 'open') {
-        setOutgoing((prev) =>
-          prev.map((f) =>
-            f.fileId === fileId
-              ? { ...f, status: 'queued', bytesSent: 0, bytesReceived: 0, speed: 0 }
-              : f
-          )
-        );
-        pendingFilesRef.current.push({ file, meta });
-        return true;
-      }
+      const dc = getDc();
+      const isOpen = Boolean(dc) && dc.readyState === 'open';
 
       setOutgoing((prev) =>
         prev.map((f) =>
           f.fileId === fileId
-            ? { ...f, status: 'waiting', bytesSent: 0, bytesReceived: 0, speed: 0 }
+            ? {
+                ...f,
+                fileId: newId,
+                status: isOpen ? 'waiting' : 'queued',
+                bytesSent: 0,
+                bytesReceived: 0,
+                progress: 0,
+                speed: 0,
+              }
             : f
         )
       );
 
-      offerAndSend(dc, file, meta);
+      if (!isOpen) {
+        pendingFilesRef.current.push({ file, meta });
+        return true;
+      }
 
+      runJob(makeJob(file, meta));
       return true;
     },
-    [getDataChannel]
+    [getDc, runJob]
   );
 
   return {
     outgoing,
     incoming,
     sendFiles,
-    handleIncomingData: wrappedHandler,
+    handleIncomingData,
     downloadFile,
     acceptOffer,
     rejectOffer,

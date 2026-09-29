@@ -21,7 +21,7 @@ frontend/android/app/build/
 frontend/android/build/
 frontend/android/.gradle/
 frontend/android/capacitor-cordova-android-plugins/build/
-
+frontend/public/downloads/
 # Environment variables
 .env
 .env.*
@@ -49,6 +49,8 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.temp
+
+
 
 # Coverage
 coverage/

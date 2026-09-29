@@ -1,4 +1,6 @@
-import { useState } from 'react';
+// src/pages/Home.jsx
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Radio,
@@ -7,6 +9,7 @@ import {
   WifiOff,
   Smartphone,
   Laptop,
+  Monitor,
   ShieldCheck,
   Zap,
   Signal,
@@ -15,6 +18,8 @@ import {
   Activity,
   Cable,
   Server,
+  Download,
+  ChevronDown,
 } from 'lucide-react';
 
 import { normalizeRoomCode } from '../utils/generateRoomCode';
@@ -25,6 +30,56 @@ import FeatureCards from '../components/common/FeatureCards';
 
 const GRID_BG =
   'linear-gradient(rgba(124,58,237,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.08) 1px, transparent 1px)';
+
+/* =========================================================
+   APP DOWNLOADS
+   - When a new version is released, add a new entry at the TOP of that
+     platform's `versions` list. The first entry is shown as "Latest",
+     and the rest appear under "Older versions".
+   - `url`: a file inside /public/downloads/ (e.g. '/downloads/...')
+     or a full external link (GitHub Releases, etc.).
+   - `size` and `date` are optional (e.g. '48 MB', '29 Sep 2026').
+========================================================= */
+const APP_DOWNLOADS = [
+  {
+    id: 'android',
+    name: 'Android',
+    ext: '.apk',
+    icon: Smartphone,
+    note: 'You may need to allow "Install unknown apps" during installation.',
+    versions: [
+      {
+        version: '1.0.0',
+        url: '/downloads/WebDrop-1.0.0.apk',
+        size: '',
+        date: '',
+      },
+    ],
+  },
+  {
+    id: 'windows',
+    name: 'Windows',
+    ext: '.exe',
+    icon: Monitor,
+    note: 'If a SmartScreen warning appears, choose "More info" → "Run anyway".',
+    versions: [
+      {
+        version: '1.0.0',
+        url: '/downloads/WebDrop-Setup-1.0.0.exe',
+        size: '',
+        date: '',
+      },
+    ],
+  },
+];
+
+function detectPlatform() {
+  if (typeof navigator === 'undefined') return null;
+  const ua = navigator.userAgent || '';
+  if (/android/i.test(ua)) return 'android';
+  if (/windows/i.test(ua)) return 'windows';
+  return null;
+}
 
 export default function Home() {
   const [creating, setCreating] = useState(false);
@@ -123,7 +178,7 @@ export default function Home() {
               </p>
 
               {/* Actions */}
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
                   onClick={handleCreateRoom}
@@ -146,6 +201,8 @@ export default function Home() {
                   <Cable className="h-4 w-4" strokeWidth={2.2} />
                   Join with a code
                 </button>
+
+                <DownloadDropdown />
               </div>
 
               {/* Technology strip */}
@@ -550,6 +607,196 @@ export default function Home() {
         }
       `}</style>
     </div>
+  );
+}
+
+/* =========================================================
+   Download app dropdown
+   - Rendered in a portal with fixed positioning so the hero
+     section's `overflow-hidden` cannot clip it.
+========================================================= */
+
+function DownloadDropdown() {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 340 });
+  const buttonRef = useRef(null);
+  const panelRef = useRef(null);
+
+  const currentPlatform = useMemo(detectPlatform, []);
+
+  // Show the card for the user's current device first
+  const items = useMemo(
+    () =>
+      [...APP_DOWNLOADS].sort(
+        (a, b) => Number(b.id === currentPlatform) - Number(a.id === currentPlatform)
+      ),
+    [currentPlatform]
+  );
+
+  // Position the panel right below the button, kept inside the viewport
+  const updatePosition = useCallback(() => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = Math.min(360, window.innerWidth - 16);
+    let left = rect.left;
+    if (left + width > window.innerWidth - 8) left = window.innerWidth - width - 8;
+    left = Math.max(8, left);
+    setPos({ top: rect.bottom + 8, left, width });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    updatePosition();
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const onPointerDown = (e) => {
+      const insidePanel = panelRef.current?.contains(e.target);
+      const insideButton = buttonRef.current?.contains(e.target);
+      if (!insidePanel && !insideButton) setOpen(false);
+    };
+
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, updatePosition]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="inline-flex items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-6 py-3.5 text-[14px] font-semibold text-purple-700 transition-all hover:-translate-y-0.5 hover:bg-purple-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/20 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20"
+      >
+        <Download className="h-4 w-4" strokeWidth={2.2} />
+        Download app
+        <ChevronDown
+          className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+          strokeWidth={2.4}
+        />
+      </button>
+
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            role="menu"
+            aria-label="Download app"
+            style={{ top: pos.top, left: pos.left, width: pos.width }}
+            className="fixed z-[100] max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-surface-border dark:bg-surface-card"
+          >
+            <div className="flex flex-col gap-2">
+              {items.map((item) => {
+                const [latest, ...older] = item.versions;
+                if (!latest) return null;
+                const Icon = item.icon;
+                const meta = [latest.size, latest.date].filter(Boolean).join(' · ');
+
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-surface-border dark:bg-white/[0.03]"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-500/15">
+                        <Icon className="h-5 w-5 text-purple-600 dark:text-purple-400" strokeWidth={2} />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[13px] font-bold text-slate-900 dark:text-white">
+                            {item.name}
+                          </p>
+                          <span className="rounded-md bg-slate-200/70 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-slate-600 dark:bg-white/10 dark:text-slate-300">
+                            {item.ext}
+                          </span>
+                          {currentPlatform === item.id && (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400">
+                              Your device
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                          <span className="font-semibold text-slate-700 dark:text-slate-200">
+                            v{latest.version}
+                          </span>{' '}
+                          <span className="text-emerald-600 dark:text-emerald-400">· Latest</span>
+                          {meta ? ` · ${meta}` : ''}
+                        </p>
+                      </div>
+
+                      <a
+                        href={latest.url}
+                        download
+                        role="menuitem"
+                        onClick={() => setOpen(false)}
+                        className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3.5 text-[12px] font-semibold text-white transition-colors hover:bg-purple-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/30"
+                      >
+                        <Download className="h-3.5 w-3.5" strokeWidth={2.4} />
+                        Download
+                      </a>
+                    </div>
+
+                    {item.note && (
+                      <p className="mt-2.5 text-[11px] leading-relaxed text-slate-400 dark:text-slate-500">
+                        {item.note}
+                      </p>
+                    )}
+
+                    {older.length > 0 && (
+                      <details className="mt-2.5 border-t border-slate-200 pt-2.5 dark:border-white/[0.06]">
+                        <summary className="cursor-pointer select-none text-[12px] font-semibold text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200">
+                          Older versions ({older.length})
+                        </summary>
+                        <ul className="mt-2 flex flex-col gap-1.5">
+                          {older.map((v) => (
+                            <li
+                              key={v.version}
+                              className="flex items-center justify-between gap-3 text-[12px]"
+                            >
+                              <span className="text-slate-600 dark:text-slate-300">
+                                v{v.version}
+                                {[v.size, v.date].filter(Boolean).length > 0 &&
+                                  ` · ${[v.size, v.date].filter(Boolean).join(' · ')}`}
+                              </span>
+                              <a
+                                href={v.url}
+                                download
+                                role="menuitem"
+                                onClick={() => setOpen(false)}
+                                className="inline-flex items-center gap-1 font-semibold text-purple-600 hover:underline dark:text-purple-400"
+                              >
+                                <Download className="h-3 w-3" strokeWidth={2.4} />
+                                Download
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 

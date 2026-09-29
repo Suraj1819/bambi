@@ -1,3 +1,4 @@
+// src/hooks/useWebRTC.js
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ICE_SERVERS } from '../utils/constants';
 
@@ -71,6 +72,19 @@ export function useWebRTC({
   }, []);
 
   /* ============================================================
+     KEEP dataChannelOpen IN SYNC WITH THE REAL CHANNEL STATE
+     FIX: a transient 'disconnected' peer state used to force this
+     flag to false, and nothing set it back to true when the
+     connection recovered (dc.onopen never fires again). The UI then
+     showed "Establishing" while the channel was open and the
+     transfer was still running.
+  ============================================================ */
+
+  const syncDataChannelOpen = useCallback(() => {
+    setDataChannelOpen(dcRef.current?.readyState === 'open');
+  }, []);
+
+  /* ============================================================
      DATA CHANNEL
   ============================================================ */
 
@@ -87,6 +101,10 @@ export function useWebRTC({
 
     dc.onclose = () => {
       console.log('[WebRTC] DataChannel CLOSED');
+
+      // Ignore a late close event from an old channel that has
+      // already been replaced by a new one.
+      if (dcRef.current && dcRef.current !== dc) return;
 
       setDataChannelOpen(false);
     };
@@ -194,6 +212,8 @@ export function useWebRTC({
 
       if (state === 'connected' || state === 'completed') {
         console.log('[WebRTC] ICE connection established');
+        // Recovered from a temporary drop — re-sync the flag.
+        syncDataChannelOpen();
       }
 
       if (state === 'disconnected') {
@@ -240,12 +260,14 @@ export function useWebRTC({
         );
       }
 
-      if (
-        state === 'failed' ||
-        state === 'disconnected' ||
-        state === 'closed'
-      ) {
+      if (state === 'failed' || state === 'closed') {
+        // Really dead.
         setDataChannelOpen(false);
+      } else {
+        // 'connected' / 'disconnected' / 'connecting': the channel may
+        // still be perfectly usable (e.g. a brief network blip), so
+        // mirror its actual readyState instead of assuming it is down.
+        syncDataChannelOpen();
       }
     };
 
@@ -277,7 +299,7 @@ export function useWebRTC({
     pcRef.current = pc;
 
     return pc;
-  }, [wireDataChannel, resetPeer]);
+  }, [wireDataChannel, resetPeer, syncDataChannelOpen]);
 
   /* ============================================================
      HOST - CREATE OFFER
