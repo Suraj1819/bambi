@@ -1,10 +1,39 @@
 import { Link } from 'react-router-dom';
-import { Github, ArrowUpRight } from 'lucide-react';
+import { Github, ArrowUpRight, Lock } from 'lucide-react';
 
 import logo from '../../assets/images/Logo.png';
+import { useRoom } from '../../context/RoomContext';
+import { toast } from './ToastContainer';
 
 export default function Footer() {
   const year = new Date().getFullYear();
+
+  // navLocked = true jab tak user RoomPage me hai (sender ho ya receiver).
+  // Navbar bhi yahi flag use karta hai.
+  const { navLocked } = useRoom();
+
+  const guardClick = (e) => {
+    if (!navLocked) return;
+
+    e.preventDefault();
+    toast.warning(
+      'Leave the room first',
+      'Finish or cancel your transfer before navigating away.'
+    );
+  };
+
+  // Har footer link ke liye common props (click block + a11y)
+  const lockProps = {
+    onClick: guardClick,
+    'aria-disabled': navLocked || undefined,
+    tabIndex: navLocked ? -1 : undefined,
+  };
+
+  const linkClass = `transition-colors duration-200 ${
+    navLocked
+      ? 'cursor-not-allowed opacity-40'
+      : 'hover:text-slate-900 dark:hover:text-white'
+  }`;
 
   return (
     <footer className="border-t border-slate-200/80 bg-white transition-colors dark:border-white/[0.06] dark:bg-surface">
@@ -16,13 +45,18 @@ export default function Footer() {
             <Link
               to="/"
               aria-label="WebDrop home"
-              className="group flex items-center gap-3"
+              {...lockProps}
+              className={`group flex items-center gap-3 ${
+                navLocked ? 'cursor-not-allowed opacity-60' : ''
+              }`}
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center">
                 <img
                   src={logo}
                   alt="WebDrop"
-                  className="h-9 w-9 object-contain transition-transform duration-200 group-hover:scale-[1.04]"
+                  className={`h-9 w-9 object-contain transition-transform duration-200 ${
+                    navLocked ? '' : 'group-hover:scale-[1.04]'
+                  }`}
                 />
               </div>
 
@@ -43,24 +77,15 @@ export default function Footer() {
             aria-label="Footer navigation"
             className="flex flex-wrap items-center gap-x-5 gap-y-2.5 text-[12px] font-medium text-slate-500 dark:text-slate-400"
           >
-            <Link
-              to="/"
-              className="transition-colors duration-200 hover:text-slate-900 dark:hover:text-white"
-            >
+            <Link to="/" {...lockProps} className={linkClass}>
               Overview
             </Link>
 
-            <Link
-              to="/create"
-              className="transition-colors duration-200 hover:text-slate-900 dark:hover:text-white"
-            >
+            <Link to="/create" {...lockProps} className={linkClass}>
               Create room
             </Link>
 
-            <Link
-              to="/join"
-              className="transition-colors duration-200 hover:text-slate-900 dark:hover:text-white"
-            >
+            <Link to="/join" {...lockProps} className={linkClass}>
               Join room
             </Link>
 
@@ -68,20 +93,27 @@ export default function Footer() {
               href="https://github.com/Suraj1819/web-drop"
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-1.5 transition-colors duration-200 hover:text-slate-900 dark:hover:text-white"
+              {...lockProps}
+              className={`group flex items-center gap-1.5 ${linkClass}`}
             >
-              <Github
-                className="h-3.5 w-3.5"
-                strokeWidth={1.9}
-              />
+              <Github className="h-3.5 w-3.5" strokeWidth={1.9} />
 
               <span>Source</span>
 
-              <ArrowUpRight
-                className="h-3 w-3 opacity-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100"
-                strokeWidth={2}
-              />
+              {!navLocked && (
+                <ArrowUpRight
+                  className="h-3 w-3 opacity-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100"
+                  strokeWidth={2}
+                />
+              )}
             </a>
+
+            {navLocked && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                <Lock className="h-3 w-3" strokeWidth={2.4} />
+                Locked in room
+              </span>
+            )}
           </nav>
 
           {/* COPYRIGHT */}
