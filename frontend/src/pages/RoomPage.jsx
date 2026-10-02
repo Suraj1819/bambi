@@ -48,6 +48,7 @@ import {
   Plus,
   Home,
   AlertTriangle,
+  AlertCircle,
   LogOut,
   Copy as CopyIcon,
   DownloadCloud,
@@ -69,6 +70,7 @@ import { useFileTransfer } from '../hooks/useFileTransfer';
 
 import { toast } from '../components/common/ToastContainer';
 import PeerRadar from '../components/common/PeerRadar';
+import ShareModal from '../components/common/ShareModal';
 
 import {
   detectDevice,
@@ -80,6 +82,8 @@ import {
 
 const LARGE_FILE_WARNING_BYTES = 500 * 1024 * 1024;
 
+const LOW_TIME_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
 const IGNORED_FILES = new Set([
   '.DS_Store',
   'Thumbs.db',
@@ -87,7 +91,7 @@ const IGNORED_FILES = new Set([
 ]);
 
 /* -------------------------------------------------------------------------- */
-/* Date-time helper                                                           */
+/* Date-time helpers                                                          */
 /* -------------------------------------------------------------------------- */
 
 function formatDateTime(value) {
@@ -106,6 +110,12 @@ function formatDateTime(value) {
   } catch {
     return '—';
   }
+}
+
+function isLowTime(expiresAt, now) {
+  if (!expiresAt) return false;
+  const remaining = new Date(expiresAt).getTime() - now;
+  return remaining > 0 && remaining < LOW_TIME_THRESHOLD_MS;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1085,6 +1095,7 @@ export default function RoomPage() {
   const [createdAt, setCreatedAt] = useState(null);
   const [notifyEnabled, setNotifyEnabled] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [now, setNow] = useState(Date.now());
 
@@ -1171,7 +1182,6 @@ export default function RoomPage() {
 
           if (room.expiresAt) setExpiresAtRef.current(room.expiresAt);
 
-          // Created at: prefer server value; fallback to expiresAt − 30 min
           if (room.createdAt) {
             setCreatedAtRef.current(room.createdAt);
           } else if (room.expiresAt) {
@@ -1546,7 +1556,6 @@ export default function RoomPage() {
       // ignore
     }
 
-    // Do NOT clear host token — the room stays alive.
     navigate('/', { replace: true });
   }, [socket, roomCode, navigate]);
 
@@ -1598,11 +1607,11 @@ export default function RoomPage() {
   }, []);
 
   const handleCopyRoom = useCallback(() => {
-    copyText(roomCode, 'Room code copied.');
+    return copyText(roomCode, 'Room code copied.');
   }, [roomCode, copyText]);
 
   const handleCopyInvite = useCallback(() => {
-    copyText(inviteUrl, 'Invite link copied.');
+    return copyText(inviteUrl, 'Invite link copied.');
   }, [inviteUrl, copyText]);
 
   const handleCopyName = useCallback(
@@ -1612,22 +1621,10 @@ export default function RoomPage() {
     [copyText],
   );
 
-  const handleShare = useCallback(async () => {
-    if (!navigator.share) {
-      handleCopyInvite();
-      return;
-    }
-
-    try {
-      await navigator.share({
-        title: 'Join WebDrop room',
-        text: `Join my WebDrop room: ${roomCode}`,
-        url: inviteUrl,
-      });
-    } catch {
-      // User cancelled.
-    }
-  }, [roomCode, inviteUrl, handleCopyInvite]);
+  /* Share button -> WhatsApp / Facebook / Telegram ... wali window kholta hai */
+  const handleShare = useCallback(() => {
+    setShowShare(true);
+  }, []);
 
   const sendSelectedFiles = useCallback(
     async (files) => {
@@ -1932,17 +1929,13 @@ export default function RoomPage() {
     }
   }, []);
 
-  /* ------------------------------------------------------------------------ */
-  /* Remove single file — hook accepts 'in' / 'out' or 'incoming' / 'outgoing'*/
-  /* ------------------------------------------------------------------------ */
+  // FileRow 'incoming' / 'outgoing' bhejta hai, hook ko 'in' / 'out' chahiye
   const handleRemove = useCallback((fileId, direction) => {
     if (!fileId) return;
-    transferRef.current?.removeFile?.(fileId, direction);
+    const dir = direction === 'incoming' || direction === 'in' ? 'in' : 'out';
+    transferRef.current?.removeFile?.(fileId, dir);
   }, []);
 
-  /* ------------------------------------------------------------------------ */
-  /* Clear completed — INCOMING                                               */
-  /* ------------------------------------------------------------------------ */
   const handleClearCompletedIncoming = useCallback(() => {
     if (!completedIncoming.length) {
       toast.success('Nothing to clear.');
@@ -1959,9 +1952,6 @@ export default function RoomPage() {
     );
   }, [completedIncoming]);
 
-  /* ------------------------------------------------------------------------ */
-  /* Clear completed — OUTGOING                                               */
-  /* ------------------------------------------------------------------------ */
   const handleClearCompletedOutgoing = useCallback(() => {
     if (!completedOutgoing.length) {
       toast.success('Nothing to clear.');
@@ -1978,9 +1968,6 @@ export default function RoomPage() {
     );
   }, [completedOutgoing]);
 
-  /* ------------------------------------------------------------------------ */
-  /* Clear cancelled — INCOMING                                               */
-  /* ------------------------------------------------------------------------ */
   const handleClearCancelledIncoming = useCallback(() => {
     const dead = failedIncoming.concat(cancelledIncoming);
 
@@ -1997,9 +1984,6 @@ export default function RoomPage() {
     toast.success(`Cleared ${dead.length} cancelled incoming file(s).`);
   }, [cancelledIncoming, failedIncoming]);
 
-  /* ------------------------------------------------------------------------ */
-  /* Clear cancelled — OUTGOING                                               */
-  /* ------------------------------------------------------------------------ */
   const handleClearCancelledOutgoing = useCallback(() => {
     const dead = failedOutgoing.concat(cancelledOutgoing);
 
@@ -2051,6 +2035,11 @@ export default function RoomPage() {
     return formatETA(Math.ceil(remaining / 1000));
   }, [expiresAt, now]);
 
+  const lowTime = useMemo(
+    () => isLowTime(expiresAt, now),
+    [expiresAt, now],
+  );
+
   const createdAtText = useMemo(
     () => formatDateTime(createdAt),
     [createdAt],
@@ -2065,12 +2054,15 @@ export default function RoomPage() {
     return '—';
   }, [expiresAt, createdAt]);
 
+  // Peer radar ke bubbles ki direction: 'out' | 'in' | 'both' | null
   const radarFlow = useMemo(() => {
-    if (activeOutgoing.length) return 'outgoing';
-    if (activeIncoming.length) return 'incoming';
-    if (connected) return 'connected';
-    return 'idle';
-  }, [activeOutgoing.length, activeIncoming.length, connected]);
+    const sending = activeOutgoing.length > 0;
+    const receiving = activeIncoming.length > 0;
+    if (sending && receiving) return 'both';
+    if (sending) return 'out';
+    if (receiving) return 'in';
+    return null;
+  }, [activeOutgoing.length, activeIncoming.length]);
 
   const YouIcon = getDeviceIconFromInfo(deviceInfo, deviceName);
 
@@ -2392,13 +2384,14 @@ export default function RoomPage() {
                 onClick={handleCopyInvite}
                 className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#0f1115] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
               >
-                <Share2 size={14} />
+                <LinkIcon size={14} />
                 Invite
               </button>
 
               <button
                 type="button"
                 onClick={handleShare}
+                aria-haspopup="dialog"
                 className="inline-flex h-9 items-center gap-2 rounded-xl bg-violet-600 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700"
               >
                 <Share2 size={14} />
@@ -2519,9 +2512,45 @@ export default function RoomPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-500">
-            <span className="inline-flex items-center gap-1.5">
-              <Clock size={13} />
-              Expires in {expiryText}
+            <span
+              className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-sm font-extrabold tracking-wide transition-colors ${
+                lowTime
+                  ? 'bg-red-50 text-red-600 ring-1 ring-red-300 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-900/60'
+                  : 'bg-slate-100 text-slate-700 dark:bg-slate-800/70 dark:text-slate-200'
+              }`}
+              role={lowTime ? 'alert' : undefined}
+            >
+              {/* Circle icon: 10 min se kam bachne par red alert icon ban kar blink karta hai */}
+              <span
+                className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                  lowTime
+                    ? 'bg-red-500 text-white'
+                    : 'bg-slate-200/80 text-slate-500 dark:bg-slate-700/60 dark:text-slate-300'
+                }`}
+                style={
+                  lowTime
+                    ? { animation: 'roomAlertBlink 1s ease-in-out infinite' }
+                    : undefined
+                }
+              >
+                {lowTime && (
+                  <span className="absolute inset-0 animate-ping rounded-full bg-red-400/60" />
+                )}
+
+                {lowTime ? (
+                  <AlertCircle size={15} className="relative" strokeWidth={2.6} />
+                ) : (
+                  <Clock size={13} className="relative" strokeWidth={2.4} />
+                )}
+              </span>
+
+              <span className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-70">
+                {lowTime ? 'Ending soon' : 'Expires in'}
+              </span>
+
+              <span className="font-mono text-sm font-extrabold tabular-nums sm:text-base">
+                {expiryText}
+              </span>
             </span>
 
             <span
@@ -2591,6 +2620,7 @@ export default function RoomPage() {
                   peerVisible={peerVisible}
                   peerReveal={peerReveal}
                   connected={connected}
+                  flow={radarFlow}
                   connectionState={webrtc.connectionState}
                   deviceName={deviceName}
                   deviceInfo={deviceInfo}
@@ -3281,7 +3311,7 @@ export default function RoomPage() {
 
                         <button
                           type="button"
-                          onClick={handleCopyInvite}
+                          onClick={handleShare}
                           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
                         >
                           <Share2 size={12} />
@@ -3348,6 +3378,16 @@ export default function RoomPage() {
         </div>
       </main>
 
+      {/* Share window: WhatsApp, Facebook, Telegram, X, LinkedIn, Email, SMS, Copy */}
+      <ShareModal
+        open={showShare}
+        onClose={() => setShowShare(false)}
+        roomCode={roomCode}
+        inviteUrl={inviteUrl}
+        onCopyLink={handleCopyInvite}
+        onCopyCode={handleCopyRoom}
+      />
+
       <ConfirmModal
         open={confirmEndOpen}
         title="End this room?"
@@ -3379,6 +3419,16 @@ export default function RoomPage() {
           performLeaveRoom();
         }}
       />
+
+      <style>{`
+        @keyframes roomAlertBlink {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.25; transform: scale(0.88); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [role="alert"] * { animation: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
