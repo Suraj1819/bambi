@@ -1,6 +1,8 @@
 // src/hooks/useWebRTC.js
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ICE_SERVERS } from '../utils/constants';
+import { playSound } from '../utils/soundManager';
 
 export function useWebRTC({
   socket,
@@ -19,7 +21,22 @@ export function useWebRTC({
   const answerReceivedRef = useRef(false);
   const lastRoomCodeRef = useRef(null);
 
-  // Important: ICE candidates can arrive before remoteDescription
+  /*
+   * Used to know whether this DataChannel was actually opened.
+   *
+   * We should NOT play disconnect.mp3 when a channel that never opened
+   * gets closed during setup/reset.
+   */
+  const dataChannelWasOpenedRef = useRef(false);
+
+  /*
+   * Prevent duplicate disconnect sounds from the same channel.
+   */
+  const disconnectSoundPlayedRef = useRef(false);
+
+  /*
+   * ICE candidates can arrive before remoteDescription.
+   */
   const pendingIceCandidatesRef = useRef([]);
 
   const socketRef = useRef(socket);
@@ -38,6 +55,9 @@ export function useWebRTC({
     roleRef.current = role;
   }, [role]);
 
+  /*
+   * Always use the latest incoming-data callback.
+   */
   const handlerRef = useRef(onIncomingData);
 
   useEffect(() => {
@@ -51,8 +71,25 @@ export function useWebRTC({
   const resetPeer = useCallback(() => {
     console.log('[WebRTC] Resetting peer connection');
 
+    const currentDc = dcRef.current;
+
+    /*
+     * If the current channel was actually established, closing it
+     * represents a real WebRTC disconnection.
+     */
+    if (
+      currentDc &&
+      dataChannelWasOpenedRef.current &&
+      currentDc.readyState === 'open'
+    ) {
+      if (!disconnectSoundPlayedRef.current) {
+        disconnectSoundPlayedRef.current = true;
+        playSound('disconnect');
+      }
+    }
+
     try {
-      dcRef.current?.close();
+      currentDc?.close();
     } catch {}
 
     try {
@@ -67,21 +104,21 @@ export function useWebRTC({
 
     pendingIceCandidatesRef.current = [];
 
+    dataChannelWasOpenedRef.current = false;
+    disconnectSoundPlayedRef.current = false;
+
     setConnectionState('new');
     setDataChannelOpen(false);
   }, []);
 
   /* ============================================================
-     KEEP dataChannelOpen IN SYNC WITH THE REAL CHANNEL STATE
-     FIX: a transient 'disconnected' peer state used to force this
-     flag to false, and nothing set it back to true when the
-     connection recovered (dc.onopen never fires again). The UI then
-     showed "Establishing" while the channel was open and the
-     transfer was still running.
+     KEEP DATA CHANNEL STATE IN SYNC
   ============================================================ */
 
   const syncDataChannelOpen = useCallback(() => {
-    setDataChannelOpen(dcRef.current?.readyState === 'open');
+    const isOpen = dcRef.current?.readyState === 'open';
+
+    setDataChannelOpen(Boolean(isOpen));
   }, []);
 
   /* ============================================================
@@ -89,28 +126,62 @@ export function useWebRTC({
   ============================================================ */
 
   const wireDataChannel = useCallback((dc) => {
-    if (!dc) return;
+    if (!dc) {
+      return;
+    }
 
     dc.binaryType = 'arraybuffer';
 
     dc.onopen = () => {
       console.log('[WebRTC] DataChannel OPEN');
 
+      /*
+       * Mark this channel as genuinely established.
+       */
+      dataChannelWasOpenedRef.current = true;
+
+      /*
+       * Allow a future disconnect event to play its sound.
+       */
+      disconnectSoundPlayedRef.current = false;
+
       setDataChannelOpen(true);
+
+      /*
+       * This is the actual P2P connection-established event.
+       */
+      playSound('connect');
     };
 
     dc.onclose = () => {
       console.log('[WebRTC] DataChannel CLOSED');
 
-      // Ignore a late close event from an old channel that has
-      // already been replaced by a new one.
-      if (dcRef.current && dcRef.current !== dc) return;
+      /*
+       * Ignore late close event from an old DataChannel.
+       */
+      if (dcRef.current && dcRef.current !== dc) {
+        return;
+      }
 
       setDataChannelOpen(false);
+
+      /*
+       * Only play disconnect sound if this channel had actually
+       * reached OPEN state.
+       */
+      if (
+        dataChannelWasOpenedRef.current &&
+        !disconnectSoundPlayedRef.current
+      ) {
+        disconnectSoundPlayedRef.current = true;
+        playSound('disconnect');
+      }
+
+      dataChannelWasOpenedRef.current = false;
     };
 
-    dc.onerror = (err) => {
-      console.error('[WebRTC] DataChannel ERROR:', err);
+    dc.onerror = (error) => {
+      console.error('[WebRTC] DataChannel ERROR:', error);
     };
 
     dc.onmessage = (event) => {
@@ -126,8 +197,9 @@ export function useWebRTC({
     if (pcRef.current) {
       const existingState = pcRef.current.connectionState;
 
-      // FIX: if the old peer connection is dead, reset it instead
-      // of silently returning a connection that can never work again.
+      /*
+       * Dead peer connection cannot be reused.
+       */
       if (
         existingState === 'failed' ||
         existingState === 'closed' ||
@@ -136,6 +208,7 @@ export function useWebRTC({
         console.log(
           '[WebRTC] Existing peer is dead, resetting before creating new one'
         );
+
         resetPeer();
       } else {
         return pcRef.current;
@@ -212,27 +285,23 @@ export function useWebRTC({
 
       if (state === 'connected' || state === 'completed') {
         console.log('[WebRTC] ICE connection established');
-        // Recovered from a temporary drop — re-sync the flag.
+
         syncDataChannelOpen();
       }
 
       if (state === 'disconnected') {
-        console.warn(
-          '[WebRTC] ICE disconnected'
-        );
+        console.warn('[WebRTC] ICE disconnected');
       }
 
       if (state === 'failed') {
-        console.error(
-          '[WebRTC] ICE connection FAILED'
-        );
+        console.error('[WebRTC] ICE connection FAILED');
 
         try {
           pc.restartIce?.();
-        } catch (err) {
+        } catch (error) {
           console.warn(
             '[WebRTC] restartIce failed:',
-            err
+            error
           );
         }
       }
@@ -252,21 +321,15 @@ export function useWebRTC({
 
       setConnectionState(state);
 
-      if (
-        state === 'connected'
-      ) {
-        console.log(
-          '[WebRTC] PEER CONNECTED'
-        );
+      if (state === 'connected') {
+        console.log('[WebRTC] PEER CONNECTED');
+
+        syncDataChannelOpen();
       }
 
       if (state === 'failed' || state === 'closed') {
-        // Really dead.
         setDataChannelOpen(false);
       } else {
-        // 'connected' / 'disconnected' / 'connecting': the channel may
-        // still be perfectly usable (e.g. a brief network blip), so
-        // mirror its actual readyState instead of assuming it is down.
         syncDataChannelOpen();
       }
     };
@@ -283,7 +346,7 @@ export function useWebRTC({
     };
 
     /* ----------------------------------------------------------
-       DATA CHANNEL FROM REMOTE PEER
+       REMOTE DATA CHANNEL
     ---------------------------------------------------------- */
 
     pc.ondatachannel = (event) => {
@@ -291,7 +354,25 @@ export function useWebRTC({
         '[WebRTC] Remote DataChannel received'
       );
 
+      /*
+       * Close previous channel if a different one arrives.
+       */
+      if (
+        dcRef.current &&
+        dcRef.current !== event.channel
+      ) {
+        try {
+          dcRef.current.close();
+        } catch {}
+      }
+
       dcRef.current = event.channel;
+
+      /*
+       * New channel has not opened yet.
+       */
+      dataChannelWasOpenedRef.current = false;
+      disconnectSoundPlayedRef.current = false;
 
       wireDataChannel(event.channel);
     };
@@ -299,7 +380,11 @@ export function useWebRTC({
     pcRef.current = pc;
 
     return pc;
-  }, [wireDataChannel, resetPeer, syncDataChannelOpen]);
+  }, [
+    wireDataChannel,
+    resetPeer,
+    syncDataChannelOpen,
+  ]);
 
   /* ============================================================
      HOST - CREATE OFFER
@@ -310,24 +395,18 @@ export function useWebRTC({
     const rc = roomCodeRef.current;
 
     if (!s || !rc) {
-      console.warn(
-        '[Host] Socket or room missing'
-      );
+      console.warn('[Host] Socket or room missing');
       return;
     }
 
     if (!s.connected) {
-      console.warn(
-        '[Host] Socket not connected'
-      );
+      console.warn('[Host] Socket not connected');
       return;
     }
 
     if (offerSentRef.current) {
-      // FIX: an offer was sent before, but check whether that
-      // connection is actually still alive. If it's dead (guest
-      // left / connection failed), allow a fresh offer to go out.
-      const existingState = pcRef.current?.connectionState;
+      const existingState =
+        pcRef.current?.connectionState;
 
       const isHealthy =
         pcRef.current &&
@@ -339,12 +418,14 @@ export function useWebRTC({
         console.log(
           '[Host] Offer already sent, connection healthy'
         );
+
         return;
       }
 
       console.log(
         '[Host] Previous connection dead, allowing new offer'
       );
+
       resetPeer();
     }
 
@@ -357,8 +438,9 @@ export function useWebRTC({
 
       const pc = createPeer();
 
-      /* Create DataChannel only on host */
-
+      /*
+       * Host creates the DataChannel.
+       */
       const dc = pc.createDataChannel(
         'webdrop',
         {
@@ -368,10 +450,14 @@ export function useWebRTC({
 
       dcRef.current = dc;
 
+      dataChannelWasOpenedRef.current = false;
+      disconnectSoundPlayedRef.current = false;
+
       wireDataChannel(dc);
 
-      /* Create offer */
-
+      /*
+       * Create offer.
+       */
       const offer = await pc.createOffer();
 
       await pc.setLocalDescription(offer);
@@ -392,7 +478,11 @@ export function useWebRTC({
 
       offerSentRef.current = false;
     }
-  }, [createPeer, wireDataChannel, resetPeer]);
+  }, [
+    createPeer,
+    wireDataChannel,
+    resetPeer,
+  ]);
 
   /* ============================================================
      GUEST - HANDLE OFFER
@@ -414,8 +504,9 @@ export function useWebRTC({
 
         const pc = createPeer();
 
-        /* Set remote description FIRST */
-
+        /*
+         * Remote description MUST be set first.
+         */
         await pc.setRemoteDescription(
           new RTCSessionDescription(offer)
         );
@@ -424,10 +515,9 @@ export function useWebRTC({
           '[Guest] Remote description set'
         );
 
-        /* ------------------------------------------------------
-           Add ICE candidates that arrived early
-        ------------------------------------------------------ */
-
+        /*
+         * Add queued ICE candidates.
+         */
         const pendingCandidates =
           pendingIceCandidatesRef.current;
 
@@ -453,8 +543,9 @@ export function useWebRTC({
           pendingIceCandidatesRef.current = [];
         }
 
-        /* Create answer */
-
+        /*
+         * Create answer.
+         */
         const answer = await pc.createAnswer();
 
         await pc.setLocalDescription(answer);
@@ -489,6 +580,7 @@ export function useWebRTC({
         console.warn(
           '[Host] Peer connection missing'
         );
+
         return;
       }
 
@@ -511,10 +603,9 @@ export function useWebRTC({
           '[Host] Remote description set'
         );
 
-        /* ------------------------------------------------------
-           Add queued ICE candidates
-        ------------------------------------------------------ */
-
+        /*
+         * Add queued ICE candidates.
+         */
         const pendingCandidates =
           pendingIceCandidatesRef.current;
 
@@ -575,11 +666,9 @@ export function useWebRTC({
         return;
       }
 
-      /* --------------------------------------------------------
-         IMPORTANT:
-         Remote description must exist before addIceCandidate
-      -------------------------------------------------------- */
-
+      /*
+       * Remote description must exist before adding candidate.
+       */
       if (!pc.remoteDescription) {
         console.log(
           '[ICE] Remote description not ready. Queueing candidate.'
@@ -695,22 +784,20 @@ export function useWebRTC({
   ]);
 
   /* ============================================================
-     RE-OFFER WHEN A NEW PEER JOINS THE SAME ROOM
-     FIX: roomCode does not change when a guest leaves and rejoins
-     the SAME room, so the "reset when room changes" effect above
-     never fires. Without this, the host keeps a dead/closed
-     RTCPeerConnection around and never sends a fresh offer, so a
-     rejoining guest can never reconnect.
+     RE-OFFER WHEN NEW PEER JOINS
   ============================================================ */
 
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      return;
+    }
 
     const onUserJoined = () => {
       if (roleRef.current === 'host') {
         console.log(
           '[WebRTC] New peer joined, (re)initiating connection'
         );
+
         startAsHost();
       }
     };
@@ -719,38 +806,42 @@ export function useWebRTC({
       console.log(
         '[WebRTC] Peer left the room'
       );
-      // No action needed here: the peer connection will naturally
-      // go to 'disconnected'/'failed', and createPeer()/startAsHost()
-      // will detect that dead state and reset on the next join.
     };
 
-    socket.on('user-joined', onUserJoined);
-    socket.on('user-left', onUserLeft);
+    socket.on(
+      'user-joined',
+      onUserJoined
+    );
+
+    socket.on(
+      'user-left',
+      onUserLeft
+    );
 
     return () => {
-      socket.off('user-joined', onUserJoined);
-      socket.off('user-left', onUserLeft);
+      socket.off(
+        'user-joined',
+        onUserJoined
+      );
+
+      socket.off(
+        'user-left',
+        onUserLeft
+      );
     };
-  }, [socket, startAsHost]);
+  }, [
+    socket,
+    startAsHost,
+  ]);
 
   /* ============================================================
-     RE-OFFER WHEN *WE* RECONNECT (e.g. mobile tab backgrounded
-     during the file picker, then came back).
-
-     FIX: When our own socket drops and reconnects, we get a new
-     socket.id. RoomContext re-registers that new socket.id with
-     the server's room (see RoomContext.jsx) and bumps rejoinNonce.
-     If we are the host, nobody else will proactively re-offer to
-     us (the 'user-joined' broadcast only reaches OTHER members,
-     not ourselves), so we must kick off a fresh offer ourselves.
+     RE-OFFER AFTER SOCKET RECONNECT
   ============================================================ */
 
   const didMountRejoinRef = useRef(false);
 
   useEffect(() => {
     if (!didMountRejoinRef.current) {
-      // Skip the initial render — rejoinNonce starts at 0 and this
-      // effect firing on mount does not mean a reconnect happened.
       didMountRejoinRef.current = true;
       return;
     }
@@ -763,9 +854,13 @@ export function useWebRTC({
       console.log(
         '[WebRTC] Local socket reconnected & re-registered, sending fresh offer'
       );
+
       startAsHost();
     }
-  }, [rejoinNonce, startAsHost]);
+  }, [
+    rejoinNonce,
+    startAsHost,
+  ]);
 
   /* ============================================================
      TAB VISIBILITY
@@ -887,27 +982,31 @@ export function useWebRTC({
 
   useEffect(() => {
     return () => {
-      const timer = setTimeout(() => {
-        try {
-          dcRef.current?.close();
-        } catch {}
+      /*
+       * Cleanup should not produce a fake disconnect sound simply
+       * because the React component is being unmounted.
+       */
+      const dc = dcRef.current;
+      const pc = pcRef.current;
 
-        try {
-          pcRef.current?.close();
-        } catch {}
+      try {
+        dc?.close();
+      } catch {}
 
-        pcRef.current = null;
-        dcRef.current = null;
+      try {
+        pc?.close();
+      } catch {}
 
-        offerSentRef.current = false;
-        answerReceivedRef.current = false;
+      dcRef.current = null;
+      pcRef.current = null;
 
-        pendingIceCandidatesRef.current = [];
-      }, 500);
+      offerSentRef.current = false;
+      answerReceivedRef.current = false;
 
-      return () => {
-        clearTimeout(timer);
-      };
+      pendingIceCandidatesRef.current = [];
+
+      dataChannelWasOpenedRef.current = false;
+      disconnectSoundPlayedRef.current = true;
     };
   }, []);
 
@@ -919,7 +1018,9 @@ export function useWebRTC({
     startAsHost,
     connectionState,
     dataChannelOpen,
+
     getDataChannel: () => dcRef.current,
+
     resetPeer,
   };
 }

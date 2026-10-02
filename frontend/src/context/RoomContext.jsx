@@ -1,124 +1,217 @@
+// src/context/RoomContext.jsx
+
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  useCallback,
 } from 'react';
+
 import { io } from 'socket.io-client';
+
 import { SOCKET_URL } from '../utils/constants';
-import { detectDevice, detectDeviceInfo, refineDeviceInfo } from '../utils/fileUtils';
+import {
+  detectDevice,
+  detectDeviceInfo,
+  refineDeviceInfo,
+} from '../utils/fileUtils';
 
 const RoomContext = createContext(null);
+
 const RECENT_ROOMS_KEY = 'webdrop-recent-rooms';
+
+/* ============================================================
+   CONTEXT HOOK
+============================================================ */
 
 export function useRoom() {
   const ctx = useContext(RoomContext);
-  if (!ctx) throw new Error('useRoom must be used inside <RoomProvider>');
+
+  if (!ctx) {
+    throw new Error('useRoom must be used inside <RoomProvider>');
+  }
+
   return ctx;
 }
 
 /* ============================================================
-   Host-token persistence (sessionStorage)
-   Lets a host reload/rejoin the same room and be recognised as
-   host again, without ever exposing the token to the other peer.
+   HOST TOKEN HELPERS
 ============================================================ */
+
 function hostTokenKey(roomCode) {
   return `webdrop-host-token-${roomCode}`;
 }
+
 export function saveHostToken(roomCode, token) {
+  if (!roomCode || !token) return;
+
   try {
-    window.sessionStorage.setItem(hostTokenKey(roomCode), token);
-  } catch {}
+    window.sessionStorage.setItem(
+      hostTokenKey(roomCode),
+      token
+    );
+  } catch (error) {
+    console.warn('[Room] Failed to save host token:', error);
+  }
 }
+
 export function getHostToken(roomCode) {
+  if (!roomCode) return null;
+
   try {
-    return window.sessionStorage.getItem(hostTokenKey(roomCode));
-  } catch {
+    return window.sessionStorage.getItem(
+      hostTokenKey(roomCode)
+    );
+  } catch (error) {
+    console.warn('[Room] Failed to read host token:', error);
     return null;
   }
 }
+
 export function clearHostToken(roomCode) {
+  if (!roomCode) return;
+
   try {
-    window.sessionStorage.removeItem(hostTokenKey(roomCode));
-  } catch {}
+    window.sessionStorage.removeItem(
+      hostTokenKey(roomCode)
+    );
+  } catch (error) {
+    console.warn('[Room] Failed to clear host token:', error);
+  }
 }
 
 /* ============================================================
-   Recent rooms (localStorage only — never sent to the server)
+   RECENT ROOMS
 ============================================================ */
+
 export function getRecentRooms() {
   try {
-    const raw = window.localStorage.getItem(RECENT_ROOMS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
+    const raw = window.localStorage.getItem(
+      RECENT_ROOMS_KEY
+    );
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw);
+
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.warn(
+      '[Room] Failed to read recent rooms:',
+      error
+    );
+
     return [];
   }
 }
+
 export function addRecentRoom(roomCode, role) {
+  if (!roomCode || !role) return;
+
   try {
-    const existing = getRecentRooms().filter((r) => r.roomCode !== roomCode);
-    const next = [{ roomCode, role, at: Date.now() }, ...existing].slice(0, 6);
-    window.localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(next));
-  } catch {}
+    const existing = getRecentRooms().filter(
+      (room) => room.roomCode !== roomCode
+    );
+
+    const next = [
+      {
+        roomCode,
+        role,
+        at: Date.now(),
+      },
+      ...existing,
+    ].slice(0, 6);
+
+    window.localStorage.setItem(
+      RECENT_ROOMS_KEY,
+      JSON.stringify(next)
+    );
+  } catch (error) {
+    console.warn(
+      '[Room] Failed to save recent room:',
+      error
+    );
+  }
 }
 
+/* ============================================================
+   PROVIDER
+============================================================ */
+
 export function RoomProvider({ children }) {
+  /* ----------------------------------------------------------
+     SOCKET
+  ---------------------------------------------------------- */
+
   const socketRef = useRef(null);
+
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
+
+  /* ----------------------------------------------------------
+     ROOM STATE
+  ---------------------------------------------------------- */
 
   const [roomCode, setRoomCode] = useState(null);
   const [role, setRole] = useState(null);
   const [users, setUsers] = useState([]);
   const [locked, setLocked] = useState(false);
+
+  /*
+   * navLocked is UI/navigation protection.
+   * It is intentionally separate from the server-side room lock.
+   */
   const [navLocked, setNavLocked] = useState(false);
-  const [deviceName, setDeviceName] = useState(() => detectDevice());
-  // FIX: deviceInfo is now mutable state (was a static useState with no
-  // setter). Chrome freezes the Android version to "10" in the sync
-  // User-Agent string on purpose (privacy), so the initial value here is
-  // only a best-effort fallback. The effect below asynchronously asks
-  // the User-Agent Client Hints API for the REAL version and corrects
-  // this state once it resolves (usually within a few milliseconds).
-  const [deviceInfo, setDeviceInfo] = useState(() => detectDeviceInfo());
-  const [deviceInfoReady, setDeviceInfoReady] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  /* ----------------------------------------------------------
+     DEVICE STATE
+  ---------------------------------------------------------- */
 
-    refineDeviceInfo(deviceInfo).then((refined) => {
-      if (cancelled) return;
+  const [deviceName, setDeviceName] = useState(() =>
+    detectDevice()
+  );
 
-      setDeviceInfo(refined);
-      setDeviceName(refined.label);
-      setDeviceInfoReady(true);
-    });
+  const [deviceInfo, setDeviceInfo] = useState(() =>
+    detectDeviceInfo()
+  );
 
-    return () => {
-      cancelled = true;
-    };
-    // Deliberately runs once on mount only — deviceInfo's initial value
-    // is stable (computed once via lazy useState initializer above).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [deviceInfoReady, setDeviceInfoReady] =
+    useState(false);
 
-  /* ------------------------------------------------------------
-     FIX: bumped whenever we successfully re-register our socket
-     with the server's room after a reconnect (see onConnect below).
-     Consumers (like useWebRTC) can watch this to know "I need to
-     (re)send a fresh WebRTC offer, my old signaling session is
-     stale even though the room state itself looks fine".
-  ------------------------------------------------------------ */
+  /* ----------------------------------------------------------
+     REJOIN NONCE
+     
+     Every successful socket re-registration increments this.
+     
+     useWebRTC listens to this value and can create a fresh
+     offer when the host reconnects to the signaling server.
+  ---------------------------------------------------------- */
+
   const [rejoinNonce, setRejoinNonce] = useState(0);
 
-  // Always-current refs so the socket event handlers (registered once,
-  // on mount) can see the latest roomCode/role without stale closures.
+  /* ============================================================
+     REFS
+  ============================================================ */
+
   const roomCodeRef = useRef(null);
   const roleRef = useRef(null);
   const deviceNameRef = useRef(deviceName);
   const deviceInfoRef = useRef(deviceInfo);
+
+  /*
+   * Prevents an old reconnect callback from restoring a room
+   * after the user manually left it.
+   */
+  const manualResetRef = useRef(false);
+
+  /* ============================================================
+     SYNC STATE -> REFS
+  ============================================================ */
 
   useEffect(() => {
     roomCodeRef.current = roomCode;
@@ -137,50 +230,131 @@ export function RoomProvider({ children }) {
   }, [deviceInfo]);
 
   /* ============================================================
-     SOCKET LIFECYCLE
+     REFINE DEVICE INFORMATION
   ============================================================ */
+
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadDeviceInfo() {
+      try {
+        const refined = await refineDeviceInfo(
+          detectDeviceInfo()
+        );
+
+        if (cancelled || !refined) {
+          return;
+        }
+
+        setDeviceInfo(refined);
+
+        if (refined.label) {
+          setDeviceName(refined.label);
+        }
+
+        setDeviceInfoReady(true);
+      } catch (error) {
+        console.warn(
+          '[Room] Device info refinement failed:',
+          error
+        );
+
+        if (!cancelled) {
+          setDeviceInfoReady(true);
+        }
+      }
+    }
+
+    loadDeviceInfo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* ============================================================
+     APPLY ROOM STATE
+  ============================================================ */
+
+  const applyRoomState = useCallback((room) => {
+    if (!room) return;
+
+    if (Array.isArray(room.users)) {
+      setUsers(room.users);
+    }
+
+    if (typeof room.locked === 'boolean') {
+      setLocked(room.locked);
+    }
+  }, []);
+
+  /* ============================================================
+     SOCKET INITIALIZATION
+  ============================================================ */
+
+  useEffect(() => {
+    console.log(
+      '[Room] Connecting Socket.IO:',
+      SOCKET_URL
+    );
+
     const s = io(SOCKET_URL, {
       withCredentials: true,
       autoConnect: true,
       reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000,
     });
 
     socketRef.current = s;
     setSocket(s);
 
+    /* ----------------------------------------------------------
+       CONNECT
+    ---------------------------------------------------------- */
+
     const onConnect = () => {
+      console.log(
+        '[Room] Socket connected:',
+        s.id
+      );
+
       setConnected(true);
 
+      /*
+       * If there is no active room, there is nothing to restore.
+       */
       const rc = roomCodeRef.current;
 
-      // Not in a room yet (this is the very first connection) —
-      // nothing to restore.
       if (!rc) {
         return;
       }
 
-      /* --------------------------------------------------------
-         FIX: This 'connect' event firing while we already have an
-         active roomCode means socket.io just RECONNECTED us (e.g.
-         mobile browser was backgrounded while the file picker was
-         open, network blip, etc). Reconnecting gives us a brand
-         new socket.id on the server, but the server's room.users
-         list still only knows about our OLD (now dead) socket.id.
+      /*
+       * If reset() happened manually while socket was reconnecting,
+       * don't restore the old room.
+       */
+      if (manualResetRef.current) {
+        console.log(
+          '[Room] Manual reset detected, skipping rejoin'
+        );
 
-         Without this, we *look* like we're still in the room on
-         the frontend (React state says so), but the server has no
-         idea this new socket belongs to the room — so every WebRTC
-         signaling message we send gets silently rejected as
-         "Unauthorized", and the connection can never come back.
+        return;
+      }
 
-         Re-emitting 'join-room' here re-registers our new socket.id
-         against the same room. The backend already treats this
-         exactly like a normal join (it's idempotent / safe).
-      -------------------------------------------------------- */
       const currentRole = roleRef.current;
+
       const token =
-        currentRole === 'host' ? getHostToken(rc) : undefined;
+        currentRole === 'host'
+          ? getHostToken(rc)
+          : undefined;
+
+      console.log(
+        '[Room] Re-registering room after socket connection:',
+        rc
+      );
 
       s.emit(
         'join-room',
@@ -191,143 +365,526 @@ export function RoomProvider({ children }) {
           hostToken: token,
         },
         (res) => {
+          /*
+           * The user may have left while the request was
+           * travelling. Do not restore anything in that case.
+           */
+          if (manualResetRef.current) {
+            return;
+          }
+
           if (res?.success) {
             console.log(
-              '[Room] Re-registered with server after reconnect:',
+              '[Room] Room re-registered successfully:',
               rc
             );
 
-            if (Array.isArray(res.room?.users)) {
-              setUsers(res.room.users);
+            /*
+             * Server may return the authoritative role.
+             */
+            if (
+              res.role === 'host' ||
+              res.role === 'guest'
+            ) {
+              setRole(res.role);
+              roleRef.current = res.role;
             }
 
-            if (typeof res.room?.locked === 'boolean') {
-              setLocked(res.room.locked);
+            if (res.room) {
+              applyRoomState(res.room);
             }
 
-            // Tell consumers (useWebRTC) that a fresh signaling
-            // round is needed.
-            setRejoinNonce((n) => n + 1);
-          } else {
-            console.warn(
-              '[Room] Failed to re-register after reconnect:',
-              res?.message
-            );
+            /*
+             * Tell WebRTC that signaling re-registration
+             * completed successfully.
+             */
+            setRejoinNonce((value) => value + 1);
 
-            // Room likely expired / was closed / got full while we
-            // were disconnected — nothing more we can do, reset.
-            setRoomCode(null);
-            setRole(null);
-            setUsers([]);
-            setLocked(false);
+            return;
+          }
+
+          console.warn(
+            '[Room] Room re-registration failed:',
+            res?.message
+          );
+
+          /*
+           * If the room no longer exists or the token is invalid,
+           * clear local room state.
+           */
+          setRoomCode(null);
+          setRole(null);
+          setUsers([]);
+          setLocked(false);
+
+          roomCodeRef.current = null;
+          roleRef.current = null;
+
+          if (
+            res?.message?.toLowerCase?.().includes('room') ||
+            res?.message?.toLowerCase?.().includes('token')
+          ) {
+            clearHostToken(rc);
           }
         }
       );
     };
 
-    const onDisconnect = () => setConnected(false);
-    // 🎯 Do NOT clear room state on socket disconnect — the user might be reconnecting
+    /* ----------------------------------------------------------
+       DISCONNECT
+    ---------------------------------------------------------- */
+
+    const onDisconnect = (reason) => {
+      console.warn(
+        '[Room] Socket disconnected:',
+        reason
+      );
+
+      setConnected(false);
+    };
+
+    /* ----------------------------------------------------------
+       CONNECT ERROR
+    ---------------------------------------------------------- */
+
+    const onConnectError = (error) => {
+      console.warn(
+        '[Room] Socket connection error:',
+        error?.message || error
+      );
+
+      setConnected(false);
+    };
+
+    /* ----------------------------------------------------------
+       RECONNECT ATTEMPT
+    ---------------------------------------------------------- */
+
+    const onReconnectAttempt = (attempt) => {
+      console.log(
+        '[Room] Socket reconnect attempt:',
+        attempt
+      );
+    };
+
+    /* ----------------------------------------------------------
+       RECONNECT
+    ---------------------------------------------------------- */
+
+    const onReconnect = (attempt) => {
+      console.log(
+        '[Room] Socket reconnected after attempts:',
+        attempt
+      );
+    };
+
+    /* ----------------------------------------------------------
+       REGISTER SOCKET EVENTS
+    ---------------------------------------------------------- */
 
     s.on('connect', onConnect);
     s.on('disconnect', onDisconnect);
+    s.on('connect_error', onConnectError);
+    s.io.on('reconnect_attempt', onReconnectAttempt);
+    s.io.on('reconnect', onReconnect);
 
-    if (s.connected) setConnected(true);
+    /*
+     * Socket could already be connected immediately after io().
+     */
+    if (s.connected) {
+      setConnected(true);
+    }
+
+    /* ----------------------------------------------------------
+       CLEANUP
+    ---------------------------------------------------------- */
 
     return () => {
+      console.log('[Room] Cleaning Socket.IO instance');
+
       s.off('connect', onConnect);
       s.off('disconnect', onDisconnect);
+      s.off('connect_error', onConnectError);
+
+      s.io.off(
+        'reconnect_attempt',
+        onReconnectAttempt
+      );
+
+      s.io.off(
+        'reconnect',
+        onReconnect
+      );
+
       s.disconnect();
+
+      if (socketRef.current === s) {
+        socketRef.current = null;
+      }
     };
-  }, []);
+  }, [applyRoomState]);
 
   /* ============================================================
-     GLOBAL ROOM LISTENERS
+     SOCKET ROOM EVENTS
   ============================================================ */
+
   useEffect(() => {
-    if (!socket) return;
+    if (!socket) {
+      return;
+    }
 
-    const applyRoom = (room) => {
-      if (!room) return;
-      if (Array.isArray(room.users)) setUsers(room.users);
-      if (typeof room.locked === 'boolean') setLocked(room.locked);
-    };
+    /* ----------------------------------------------------------
+       USER JOINED
+    ---------------------------------------------------------- */
 
-    const onUserJoined = (payload) => applyRoom(payload?.room);
+    const onUserJoined = (payload) => {
+      console.log(
+        '[Room] User joined:',
+        payload
+      );
 
-    const onUserLeft = (payload) => {
       if (payload?.room) {
-        applyRoom(payload.room);
-      } else if (payload?.socketId) {
-        setUsers((prev) => prev.filter((u) => u.socketId !== payload.socketId));
+        applyRoomState(payload.room);
       }
     };
 
-    const onRoomLockChanged = ({ locked: l }) => setLocked(Boolean(l));
+    /* ----------------------------------------------------------
+       USER LEFT
+    ---------------------------------------------------------- */
 
-    const onRoomExpired = () => {
-      setRoomCode(null);
-      setUsers([]);
-      setRole(null);
-      setLocked(false);
+    const onUserLeft = (payload) => {
+      console.log(
+        '[Room] User left:',
+        payload
+      );
+
+      if (payload?.room) {
+        applyRoomState(payload.room);
+        return;
+      }
+
+      if (payload?.socketId) {
+        setUsers((previous) =>
+          previous.filter(
+            (user) =>
+              user.socketId !== payload.socketId
+          )
+        );
+      }
     };
 
-    socket.on('user-joined', onUserJoined);
-    socket.on('user-left', onUserLeft);
-    socket.on('room-lock-changed', onRoomLockChanged);
-    socket.on('room-expired', onRoomExpired);
+    /* ----------------------------------------------------------
+       ROOM LOCK
+    ---------------------------------------------------------- */
+
+    const onRoomLockChanged = (payload) => {
+      const nextLocked = Boolean(
+        payload?.locked
+      );
+
+      console.log(
+        '[Room] Room lock changed:',
+        nextLocked
+      );
+
+      setLocked(nextLocked);
+    };
+
+    /* ----------------------------------------------------------
+       ROOM EXPIRED
+    ---------------------------------------------------------- */
+
+    const onRoomExpired = (payload) => {
+      console.log(
+        '[Room] Room expired:',
+        payload
+      );
+
+      const currentRoom =
+        roomCodeRef.current;
+
+      if (currentRoom) {
+        clearHostToken(currentRoom);
+      }
+
+      setRoomCode(null);
+      setRole(null);
+      setUsers([]);
+      setLocked(false);
+
+      roomCodeRef.current = null;
+      roleRef.current = null;
+    };
+
+    /* ----------------------------------------------------------
+       ROOM ENDED
+    ---------------------------------------------------------- */
+
+    const onRoomEnded = (payload) => {
+      console.log(
+        '[Room] Room ended:',
+        payload
+      );
+
+      const currentRoom =
+        roomCodeRef.current;
+
+      if (currentRoom) {
+        clearHostToken(currentRoom);
+      }
+
+      setRoomCode(null);
+      setRole(null);
+      setUsers([]);
+      setLocked(false);
+
+      roomCodeRef.current = null;
+      roleRef.current = null;
+    };
+
+    /* ----------------------------------------------------------
+       KICKED
+    ---------------------------------------------------------- */
+
+    const onKicked = (payload) => {
+      console.log(
+        '[Room] Current device was kicked:',
+        payload
+      );
+
+      const currentRoom =
+        roomCodeRef.current;
+
+      if (currentRoom) {
+        clearHostToken(currentRoom);
+      }
+
+      setRoomCode(null);
+      setRole(null);
+      setUsers([]);
+      setLocked(false);
+
+      roomCodeRef.current = null;
+      roleRef.current = null;
+    };
+
+    /* ----------------------------------------------------------
+       REGISTER
+    ---------------------------------------------------------- */
+
+    socket.on(
+      'user-joined',
+      onUserJoined
+    );
+
+    socket.on(
+      'user-left',
+      onUserLeft
+    );
+
+    socket.on(
+      'room-lock-changed',
+      onRoomLockChanged
+    );
+
+    socket.on(
+      'room-expired',
+      onRoomExpired
+    );
+
+    socket.on(
+      'room-ended',
+      onRoomEnded
+    );
+
+    socket.on(
+      'kicked',
+      onKicked
+    );
+
+    /* ----------------------------------------------------------
+       CLEANUP
+    ---------------------------------------------------------- */
 
     return () => {
-      socket.off('user-joined', onUserJoined);
-      socket.off('user-left', onUserLeft);
-      socket.off('room-lock-changed', onRoomLockChanged);
-      socket.off('room-expired', onRoomExpired);
+      socket.off(
+        'user-joined',
+        onUserJoined
+      );
+
+      socket.off(
+        'user-left',
+        onUserLeft
+      );
+
+      socket.off(
+        'room-lock-changed',
+        onRoomLockChanged
+      );
+
+      socket.off(
+        'room-expired',
+        onRoomExpired
+      );
+
+      socket.off(
+        'room-ended',
+        onRoomEnded
+      );
+
+      socket.off(
+        'kicked',
+        onKicked
+      );
     };
-  }, [socket]);
+  }, [socket, applyRoomState]);
+
+  /* ============================================================
+     SET ROOM
+     
+     Wrapper keeps refs immediately synchronized.
+     This is important because Socket.IO callbacks can execute
+     before React has committed the next render.
+  ============================================================ */
+
+  const updateRoomCode = useCallback((value) => {
+    const next =
+      typeof value === 'string'
+        ? value.trim().toUpperCase()
+        : value;
+
+    manualResetRef.current = false;
+
+    roomCodeRef.current = next || null;
+
+    setRoomCode(next || null);
+  }, []);
+
+  /* ============================================================
+     SET ROLE
+  ============================================================ */
+
+  const updateRole = useCallback((value) => {
+    roleRef.current = value || null;
+
+    setRole(value || null);
+  }, []);
+
+  /* ============================================================
+     RESET
+     
+     Used when user manually leaves a room.
+  ============================================================ */
 
   const reset = useCallback(() => {
+    const currentRoom =
+      roomCodeRef.current;
+
+    console.log(
+      '[Room] Resetting local room state:',
+      currentRoom
+    );
+
+    /*
+     * Mark this as manual so a socket reconnect callback
+     * cannot restore the old room.
+     */
+    manualResetRef.current = true;
+
+    if (currentRoom) {
+      clearHostToken(currentRoom);
+    }
+
+    roomCodeRef.current = null;
+    roleRef.current = null;
+
     setRoomCode(null);
     setRole(null);
     setUsers([]);
     setLocked(false);
+    setNavLocked(false);
   }, []);
+
+  /* ============================================================
+     CLEAR MANUAL RESET FLAG
+     
+     Call this before creating/joining a completely new room.
+  ============================================================ */
+
+  const prepareForNewRoom = useCallback(() => {
+    manualResetRef.current = false;
+  }, []);
+
+  /* ============================================================
+     MEMOIZED CONTEXT VALUE
+  ============================================================ */
 
   const value = useMemo(
     () => ({
+      /* Socket */
       socket,
+      socketRef,
       connected,
+
+      /* Room */
       roomCode,
-      setRoomCode,
+      setRoomCode: updateRoomCode,
+
       role,
-      setRole,
+      setRole: updateRole,
+
       users,
       setUsers,
+
       locked,
       setLocked,
+
+      /* Navigation */
       navLocked,
       setNavLocked,
+
+      /* Device */
       deviceName,
+      setDeviceName,
+
       deviceInfo,
-      // FIX: exposed so RoomPage can wait a brief moment for the real
-      // Android version before sending device info to the server.
+      setDeviceInfo,
+
       deviceInfoReady,
-      reset,
+
+      /* Reconnect */
       rejoinNonce,
+
+      /* Helpers */
+      reset,
+      prepareForNewRoom,
     }),
     [
       socket,
       connected,
       roomCode,
+      updateRoomCode,
       role,
+      updateRole,
       users,
       locked,
       navLocked,
       deviceName,
       deviceInfo,
       deviceInfoReady,
-      reset,
       rejoinNonce,
+      reset,
+      prepareForNewRoom,
     ]
   );
 
-  return <RoomContext.Provider value={value}>{children}</RoomContext.Provider>;
+  /* ============================================================
+     PROVIDER
+  ============================================================ */
+
+  return (
+    <RoomContext.Provider value={value}>
+      {children}
+    </RoomContext.Provider>
+  );
 }
