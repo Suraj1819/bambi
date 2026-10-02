@@ -2738,6 +2738,8 @@ export function useFileTransfer({
 
   /* ============================================================
      REMOVE FILE
+     
+     direction: 'in' | 'out'
   ============================================================ */
 
   const removeFile =
@@ -2746,9 +2748,22 @@ export function useFileTransfer({
         fileId,
         direction
       ) => {
-        if (
-          direction === 'in'
-        ) {
+        if (!fileId) return;
+
+        /*
+         * Accept both 'in' and 'incoming',
+         * and both 'out' and 'outgoing'.
+         */
+        const dir =
+          direction === 'in' ||
+          direction === 'incoming'
+            ? 'in'
+            : direction === 'out' ||
+                direction === 'outgoing'
+              ? 'out'
+              : null;
+
+        if (dir === 'in' || dir === null) {
           const row =
             incomingRef.current.find(
               (file) =>
@@ -2756,31 +2771,25 @@ export function useFileTransfer({
                 fileId
             );
 
-          if (
-            row?.status ===
-            'pending'
-          ) {
-            rejectOffer(
-              fileId
-            );
-          } else if (
-            row?.status ===
-            'receiving'
-          ) {
-            cancelIncoming(
-              fileId
+          if (row) {
+            if (row.status === 'pending') {
+              rejectOffer(fileId);
+            } else if (row.status === 'receiving') {
+              cancelIncoming(fileId);
+            }
+
+            setIncoming((prev) =>
+              prev.filter(
+                (file) =>
+                  file.fileId !== fileId
+              )
             );
           }
 
-          setIncoming(
-            (prev) =>
-              prev.filter(
-                (file) =>
-                  file.fileId !==
-                  fileId
-              )
-          );
-        } else {
+          if (dir === 'in') return;
+        }
+
+        if (dir === 'out' || dir === null) {
           const queued =
             pendingFilesRef.current.some(
               (item) =>
@@ -2789,27 +2798,19 @@ export function useFileTransfer({
             );
 
           if (
-            jobsRef.current.has(
-              fileId
-            ) ||
+            jobsRef.current.has(fileId) ||
             queued
           ) {
-            cancelOutgoing(
-              fileId
-            );
+            cancelOutgoing(fileId);
           }
 
-          retryFileRef.current.delete(
-            fileId
-          );
+          retryFileRef.current.delete(fileId);
 
-          setOutgoing(
-            (prev) =>
-              prev.filter(
-                (file) =>
-                  file.fileId !==
-                  fileId
-              )
+          setOutgoing((prev) =>
+            prev.filter(
+              (file) =>
+                file.fileId !== fileId
+            )
           );
         }
       },
@@ -2890,36 +2891,54 @@ export function useFileTransfer({
 
   /* ============================================================
      CLEAR COMPLETED
+     
+     Only removes successfully completed transfers.
+     Keeps cancelled / rejected / failed / active / pending.
   ============================================================ */
 
   const clearCompleted =
     useCallback(
       () => {
-        const done = [
-          'completed',
-          'rejected',
+        const keep = (file) =>
+          file.status !== 'completed';
+
+        setOutgoing((prev) =>
+          prev.filter(keep)
+        );
+
+        setIncoming((prev) =>
+          prev.filter(keep)
+        );
+      },
+      []
+    );
+
+  /* ============================================================
+     CLEAR CANCELLED
+     
+     Removes cancelled / rejected / failed transfers.
+     Keeps completed / active / pending.
+  ============================================================ */
+
+  const clearCancelled =
+    useCallback(
+      () => {
+        const dead = [
           'cancelled',
+          'canceled',
+          'rejected',
           'failed',
         ];
 
-        setOutgoing(
-          (prev) =>
-            prev.filter(
-              (file) =>
-                !done.includes(
-                  file.status
-                )
-            )
+        const keep = (file) =>
+          !dead.includes(file.status);
+
+        setOutgoing((prev) =>
+          prev.filter(keep)
         );
 
-        setIncoming(
-          (prev) =>
-            prev.filter(
-              (file) =>
-                !done.includes(
-                  file.status
-                )
-            )
+        setIncoming((prev) =>
+          prev.filter(keep)
         );
       },
       []
@@ -3119,6 +3138,7 @@ export function useFileTransfer({
 
     clearAll,
     clearCompleted,
+    clearCancelled,
 
     markPeerDisconnected,
 

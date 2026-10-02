@@ -87,6 +87,28 @@ const IGNORED_FILES = new Set([
 ]);
 
 /* -------------------------------------------------------------------------- */
+/* Date-time helper                                                           */
+/* -------------------------------------------------------------------------- */
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '—';
+    return d.toLocaleString(undefined, {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return '—';
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /* Device helpers                                                             */
 /* -------------------------------------------------------------------------- */
 
@@ -641,7 +663,7 @@ function SpeedometerIndicator({ quality }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* File row — PC actions on the RIGHT                                         */
+/* File row                                                                   */
 /* -------------------------------------------------------------------------- */
 
 function FileRow({
@@ -1060,6 +1082,7 @@ export default function RoomPage() {
   const [roomError, setRoomError] = useState('');
   const [roomExpired, setRoomExpired] = useState(false);
   const [expiresAt, setExpiresAt] = useState(null);
+  const [createdAt, setCreatedAt] = useState(null);
   const [notifyEnabled, setNotifyEnabled] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -1082,6 +1105,7 @@ export default function RoomPage() {
   const setUsersRef = useRef(setUsers);
   const setLockedRef = useRef(setLocked);
   const setExpiresAtRef = useRef(setExpiresAt);
+  const setCreatedAtRef = useRef(setCreatedAt);
   const setRoomExpiredRef = useRef(setRoomExpired);
   const setRoomErrorRef = useRef(setRoomError);
 
@@ -1089,6 +1113,7 @@ export default function RoomPage() {
     setUsersRef.current = setUsers;
     setLockedRef.current = setLocked;
     setExpiresAtRef.current = setExpiresAt;
+    setCreatedAtRef.current = setCreatedAt;
     setRoomExpiredRef.current = setRoomExpired;
     setRoomErrorRef.current = setRoomError;
   }, [setUsers, setLocked]);
@@ -1145,6 +1170,17 @@ export default function RoomPage() {
           setLockedRef.current(Boolean(room.locked));
 
           if (room.expiresAt) setExpiresAtRef.current(room.expiresAt);
+
+          // Created at: prefer server value; fallback to expiresAt − 30 min
+          if (room.createdAt) {
+            setCreatedAtRef.current(room.createdAt);
+          } else if (room.expiresAt) {
+            setCreatedAtRef.current(
+              new Date(
+                new Date(room.expiresAt).getTime() - 30 * 60 * 1000,
+              ).toISOString(),
+            );
+          }
 
           addRecentRoom?.({
             roomCode,
@@ -1232,6 +1268,7 @@ export default function RoomPage() {
       if (room.users) setUsersRef.current(room.users);
       if (typeof room.locked === 'boolean') setLockedRef.current(room.locked);
       if (room.expiresAt) setExpiresAtRef.current(room.expiresAt);
+      if (room.createdAt) setCreatedAtRef.current(room.createdAt);
     };
 
     const handleUserJoined = (payload) => {
@@ -1239,6 +1276,7 @@ export default function RoomPage() {
       if (typeof payload?.locked === 'boolean')
         setLockedRef.current(payload.locked);
       if (payload?.expiresAt) setExpiresAtRef.current(payload.expiresAt);
+      if (payload?.createdAt) setCreatedAtRef.current(payload.createdAt);
     };
 
     const handleUserLeft = (payload) => {
@@ -1260,15 +1298,35 @@ export default function RoomPage() {
     };
 
     const handleRoomEnded = () => {
+      if (disconnectingRef.current) return;
+
+      disconnectingRef.current = true;
       clearHostToken(roomCode);
-      setRoomErrorRef.current('The host ended this room.');
       toast.error('The host ended this room.');
+
+      try {
+        socket.emit('leave-room', { roomCode });
+      } catch {
+        // ignore
+      }
+
+      navigate('/', { replace: true });
     };
 
     const handleKicked = () => {
+      if (disconnectingRef.current) return;
+
+      disconnectingRef.current = true;
       clearHostToken(roomCode);
-      setRoomErrorRef.current('You were removed from this room.');
       toast.error('You were removed from this room.');
+
+      try {
+        socket.emit('leave-room', { roomCode });
+      } catch {
+        // ignore
+      }
+
+      navigate('/', { replace: true });
     };
 
     socket.on('room-state', handleUsers);
@@ -1289,7 +1347,7 @@ export default function RoomPage() {
       socket.off('kicked', handleKicked);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, roomCode]);
+  }, [socket, roomCode, navigate]);
 
   const requestNotifications = useCallback(async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -1443,6 +1501,9 @@ export default function RoomPage() {
     [role, socket, roomCode],
   );
 
+  /* ------------------------------------------------------------------------ */
+  /* End Room — host kills the room, everyone goes to /                       */
+  /* ------------------------------------------------------------------------ */
   const performEndRoom = useCallback(() => {
     if (role !== 'host' || !socket) return;
 
@@ -1454,25 +1515,28 @@ export default function RoomPage() {
         roomCode,
         hostToken: hostTokenRef.current,
       },
-      (response) => {
-        if (response?.success === false) {
-          disconnectingRef.current = false;
-          toast.error(response?.message || 'Unable to end room.');
-          return;
+      () => {
+        clearHostToken(roomCode);
+
+        try {
+          socket.emit('leave-room', { roomCode });
+        } catch {
+          // ignore
         }
 
-        clearHostToken(roomCode);
-        setRoomErrorRef.current('This room has been ended by the host.');
-        toast.success('Room ended.');
+        navigate('/', { replace: true });
       },
     );
-  }, [role, socket, roomCode]);
+  }, [role, socket, roomCode, navigate]);
 
   const handleEndRoom = useCallback(() => {
     if (role !== 'host' || !socket) return;
     setConfirmEndOpen(true);
   }, [role, socket]);
 
+  /* ------------------------------------------------------------------------ */
+  /* Leave Room — user leaves, room stays alive, can rejoin                   */
+  /* ------------------------------------------------------------------------ */
   const performLeaveRoom = useCallback(() => {
     disconnectingRef.current = true;
 
@@ -1482,7 +1546,8 @@ export default function RoomPage() {
       // ignore
     }
 
-    navigate('/');
+    // Do NOT clear host token — the room stays alive.
+    navigate('/', { replace: true });
   }, [socket, roomCode, navigate]);
 
   const handleLeaveRoom = useCallback(() => {
@@ -1738,15 +1803,26 @@ export default function RoomPage() {
       file.status === 'done',
   );
 
-  const failedFiles = [...incoming, ...outgoing].filter(
-    (file) => file.status === 'failed' || file.status === 'error',
-  );
-
-  const cancelledFiles = [...incoming, ...outgoing].filter(
+  const cancelledIncoming = incoming.filter(
     (file) =>
       file.status === 'cancelled' ||
       file.status === 'canceled' ||
       file.status === 'rejected',
+  );
+
+  const cancelledOutgoing = outgoing.filter(
+    (file) =>
+      file.status === 'cancelled' ||
+      file.status === 'canceled' ||
+      file.status === 'rejected',
+  );
+
+  const failedIncoming = incoming.filter(
+    (file) => file.status === 'failed' || file.status === 'error',
+  );
+
+  const failedOutgoing = outgoing.filter(
+    (file) => file.status === 'failed' || file.status === 'error',
   );
 
   /* ------------------------------------------------------------------------ */
@@ -1856,49 +1932,107 @@ export default function RoomPage() {
     }
   }, []);
 
+  /* ------------------------------------------------------------------------ */
+  /* Remove single file — hook accepts 'in' / 'out' or 'incoming' / 'outgoing'*/
+  /* ------------------------------------------------------------------------ */
   const handleRemove = useCallback((fileId, direction) => {
     if (!fileId) return;
+    transferRef.current?.removeFile?.(fileId, direction);
+  }, []);
 
-    const fn = transferRef.current?.removeFile;
-    if (typeof fn !== 'function') return;
-
-    try {
-      fn(fileId, direction);
-    } catch {
-      try {
-        fn(fileId);
-      } catch {
-        // swallow
-      }
+  /* ------------------------------------------------------------------------ */
+  /* Clear completed — INCOMING                                               */
+  /* ------------------------------------------------------------------------ */
+  const handleClearCompletedIncoming = useCallback(() => {
+    if (!completedIncoming.length) {
+      toast.success('Nothing to clear.');
+      return;
     }
-  }, []);
 
-  const handleClearCompleted = useCallback(() => {
-    transferRef.current?.clearCompleted?.();
-  }, []);
+    completedIncoming.forEach((file) => {
+      const id = file.fileId || file.id;
+      transferRef.current?.removeFile?.(id, 'in');
+    });
 
-  const handleRetryAllFailed = useCallback(() => {
-    if (!failedFiles.length) return;
-    failedFiles.forEach((file) => {
+    toast.success(
+      `Cleared ${completedIncoming.length} completed incoming file(s).`,
+    );
+  }, [completedIncoming]);
+
+  /* ------------------------------------------------------------------------ */
+  /* Clear completed — OUTGOING                                               */
+  /* ------------------------------------------------------------------------ */
+  const handleClearCompletedOutgoing = useCallback(() => {
+    if (!completedOutgoing.length) {
+      toast.success('Nothing to clear.');
+      return;
+    }
+
+    completedOutgoing.forEach((file) => {
+      const id = file.fileId || file.id;
+      transferRef.current?.removeFile?.(id, 'out');
+    });
+
+    toast.success(
+      `Cleared ${completedOutgoing.length} completed outgoing file(s).`,
+    );
+  }, [completedOutgoing]);
+
+  /* ------------------------------------------------------------------------ */
+  /* Clear cancelled — INCOMING                                               */
+  /* ------------------------------------------------------------------------ */
+  const handleClearCancelledIncoming = useCallback(() => {
+    const dead = failedIncoming.concat(cancelledIncoming);
+
+    if (!dead.length) {
+      toast.success('Nothing to clear.');
+      return;
+    }
+
+    dead.forEach((file) => {
+      const id = file.fileId || file.id;
+      transferRef.current?.removeFile?.(id, 'in');
+    });
+
+    toast.success(`Cleared ${dead.length} cancelled incoming file(s).`);
+  }, [cancelledIncoming, failedIncoming]);
+
+  /* ------------------------------------------------------------------------ */
+  /* Clear cancelled — OUTGOING                                               */
+  /* ------------------------------------------------------------------------ */
+  const handleClearCancelledOutgoing = useCallback(() => {
+    const dead = failedOutgoing.concat(cancelledOutgoing);
+
+    if (!dead.length) {
+      toast.success('Nothing to clear.');
+      return;
+    }
+
+    dead.forEach((file) => {
+      const id = file.fileId || file.id;
+      transferRef.current?.removeFile?.(id, 'out');
+    });
+
+    toast.success(`Cleared ${dead.length} cancelled outgoing file(s).`);
+  }, [cancelledOutgoing, failedOutgoing]);
+
+  const handleRetryAllFailedOutgoing = useCallback(() => {
+    if (!failedOutgoing.length) return;
+    failedOutgoing.forEach((file) => {
       const id = file.fileId || file.id;
       transferRef.current?.retryFile?.(id);
     });
-    toast.success(`Retrying ${failedFiles.length} file(s)...`);
-  }, [failedFiles]);
+    toast.success(`Retrying ${failedOutgoing.length} outgoing file(s)...`);
+  }, [failedOutgoing]);
 
-  const handleClearCancelled = useCallback(() => {
-    if (!cancelledFiles.length) return;
-
-    cancelledFiles.forEach((file) => {
+  const handleRetryAllFailedIncoming = useCallback(() => {
+    if (!failedIncoming.length) return;
+    failedIncoming.forEach((file) => {
       const id = file.fileId || file.id;
-      const direction = incoming.some((f) => (f.fileId || f.id) === id)
-        ? 'incoming'
-        : 'outgoing';
-      transferRef.current?.removeFile?.(id, direction);
+      transferRef.current?.retryFile?.(id);
     });
-
-    toast.success('Cleared cancelled files.');
-  }, [cancelledFiles, incoming]);
+    toast.success(`Retrying ${failedIncoming.length} incoming file(s)...`);
+  }, [failedIncoming]);
 
   const handleDownloadAllCompleted = useCallback(() => {
     if (!completedIncoming.length) return;
@@ -1916,6 +2050,20 @@ export default function RoomPage() {
 
     return formatETA(Math.ceil(remaining / 1000));
   }, [expiresAt, now]);
+
+  const createdAtText = useMemo(
+    () => formatDateTime(createdAt),
+    [createdAt],
+  );
+
+  const endsAtText = useMemo(() => {
+    if (expiresAt) return formatDateTime(expiresAt);
+    if (createdAt) {
+      const t = new Date(createdAt).getTime() + 30 * 60 * 1000;
+      return formatDateTime(t);
+    }
+    return '—';
+  }, [expiresAt, createdAt]);
 
   const radarFlow = useMemo(() => {
     if (activeOutgoing.length) return 'outgoing';
@@ -2248,7 +2396,16 @@ export default function RoomPage() {
                 Invite
               </button>
 
-              {/* QR dropdown — single unified style on ALL screen sizes (no full-screen modal) */}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="inline-flex h-9 items-center gap-2 rounded-xl bg-violet-600 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700"
+              >
+                <Share2 size={14} />
+                Share
+              </button>
+
+              {/* QR dropdown — after Share */}
               <div className="relative">
                 <button
                   type="button"
@@ -2268,7 +2425,6 @@ export default function RoomPage() {
                     aria-label="Scan to join"
                     className="absolute right-0 top-12 z-50 w-[min(19rem,calc(100vw-1rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-700 dark:bg-[#0f1115] sm:w-[min(20rem,calc(100vw-2rem))] sm:p-4"
                   >
-                    {/* Header */}
                     <div className="mb-2 flex items-center justify-between gap-2 sm:mb-3">
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-900 dark:text-white sm:text-sm">
@@ -2290,7 +2446,6 @@ export default function RoomPage() {
                       </button>
                     </div>
 
-                    {/* QR image */}
                     <div className="flex items-center justify-center rounded-xl bg-white p-2 sm:p-3">
                       <img
                         src={qrUrl}
@@ -2299,7 +2454,6 @@ export default function RoomPage() {
                       />
                     </div>
 
-                    {/* Invite link */}
                     <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50 px-2.5 py-2 dark:border-slate-800 dark:bg-slate-900/60 sm:mt-3 sm:px-3 sm:py-2.5">
                       <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 sm:text-[10px]">
                         Invite link
@@ -2310,7 +2464,6 @@ export default function RoomPage() {
                       </p>
                     </div>
 
-                    {/* Copy link */}
                     <button
                       type="button"
                       onClick={handleCopyInvite}
@@ -2326,15 +2479,6 @@ export default function RoomPage() {
                   </div>
                 )}
               </div>
-
-              <button
-                type="button"
-                onClick={handleShare}
-                className="inline-flex h-9 items-center gap-2 rounded-xl bg-violet-600 px-3 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700"
-              >
-                <Share2 size={14} />
-                Share
-              </button>
 
               {role === 'host' && (
                 <button
@@ -2481,6 +2625,8 @@ export default function RoomPage() {
               />
               <InfoRow icon={Lock} label="Storage" value="No server storage" />
               <InfoRow icon={Wifi} label="Signaling" value="Socket.IO" />
+              <InfoRow icon={Clock} label="Created at" value={createdAtText} />
+              <InfoRow icon={Clock} label="Ends at" value={endsAtText} />
               <InfoRow icon={Clock} label="Room lifetime" value="30 minutes" />
             </section>
 
@@ -2684,145 +2830,208 @@ export default function RoomPage() {
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
                     {incoming.length + outgoing.length} total
                   </span>
-
-                  {failedFiles.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleRetryAllFailed}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-bold text-red-600 transition hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                    >
-                      <RotateCcw size={11} />
-                      Retry all ({failedFiles.length})
-                    </button>
-                  )}
-
-                  {completedIncoming.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleDownloadAllCompleted}
-                      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-600 transition hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
-                    >
-                      <DownloadCloud size={11} />
-                      Download all
-                    </button>
-                  )}
-
-                  {(completedIncoming.length > 0 ||
-                    completedOutgoing.length > 0) && (
-                    <button
-                      type="button"
-                      onClick={handleClearCompleted}
-                      className="text-[11px] font-bold text-slate-500 transition hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400"
-                    >
-                      Clear completed
-                    </button>
-                  )}
-
-                  {cancelledFiles.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearCancelled}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-bold text-red-500 transition hover:text-red-600 dark:text-red-400"
-                    >
-                      <Eraser size={11} />
-                      Clear cancelled
-                    </button>
-                  )}
                 </div>
               </div>
 
+              {/* INCOMING */}
               <div className="p-4 sm:p-5">
-                <div>
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Inbox
-                        size={14}
-                        className="text-violet-600 dark:text-violet-400"
-                      />
+                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Inbox
+                      size={14}
+                      className="text-violet-600 dark:text-violet-400"
+                    />
 
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                        Incoming
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                      Incoming
+                    </span>
+
+                    {pendingIncoming.length > 0 && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-extrabold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                        {pendingIncoming.length} waiting
                       </span>
+                    )}
 
-                      {pendingIncoming.length > 0 && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-extrabold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                          {pendingIncoming.length} waiting
-                        </span>
-                      )}
-                    </div>
+                    {completedIncoming.length > 0 && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                        {completedIncoming.length} completed
+                      </span>
+                    )}
+
+                    {cancelledIncoming.length > 0 && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-extrabold text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                        {cancelledIncoming.length} cancelled
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {failedIncoming.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRetryAllFailedIncoming}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 text-[10px] font-bold text-red-600 transition hover:bg-red-100 active:scale-95 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                      >
+                        <RotateCcw size={11} />
+                        Retry all ({failedIncoming.length})
+                      </button>
+                    )}
+
+                    {completedIncoming.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleDownloadAllCompleted}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[10px] font-bold text-emerald-600 transition hover:bg-emerald-100 active:scale-95 dark:border-emerald-900/50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
+                      >
+                        <DownloadCloud size={11} />
+                        Download all
+                      </button>
+                    )}
+
+                    {completedIncoming.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearCompletedIncoming}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600 active:scale-95 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:bg-violet-500/10 dark:hover:text-violet-400"
+                      >
+                        <CheckCircle size={11} />
+                        Clear completed
+                      </button>
+                    )}
+
+                    {(cancelledIncoming.length > 0 ||
+                      failedIncoming.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={handleClearCancelledIncoming}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-[10px] font-bold text-red-500 transition hover:bg-red-50 active:scale-95 dark:border-red-900/50 dark:bg-[#15171d] dark:text-red-400 dark:hover:bg-red-500/10"
+                      >
+                        <Eraser size={11} />
+                        Clear cancelled
+                      </button>
+                    )}
 
                     <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
                       {incoming.length} files
                     </span>
                   </div>
-
-                  {incoming.length === 0 ? (
-                    <EmptyQueue type="incoming" />
-                  ) : (
-                    <div className="space-y-2">
-                      {incoming.map((file) => (
-                        <FileRow
-                          key={file.fileId || file.id}
-                          file={file}
-                          direction="incoming"
-                          onAccept={handleAccept}
-                          onReject={handleReject}
-                          onDownload={handleDownload}
-                          onRetry={handleRetry}
-                          onCancel={(id) => handleCancel(id, 'incoming')}
-                          onRemove={handleRemove}
-                          onCopyName={handleCopyName}
-                        />
-                      ))}
-                    </div>
-                  )}
                 </div>
 
-                <div className="mt-5 border-t border-slate-100 pt-5 dark:border-slate-800">
-                  <div className="mb-2.5 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Send
-                        size={14}
-                        className="text-violet-600 dark:text-violet-400"
+                {incoming.length === 0 ? (
+                  <EmptyQueue type="incoming" />
+                ) : (
+                  <div className="space-y-2">
+                    {incoming.map((file) => (
+                      <FileRow
+                        key={file.fileId || file.id}
+                        file={file}
+                        direction="incoming"
+                        onAccept={handleAccept}
+                        onReject={handleReject}
+                        onDownload={handleDownload}
+                        onRetry={handleRetry}
+                        onCancel={(id) => handleCancel(id, 'incoming')}
+                        onRemove={handleRemove}
+                        onCopyName={handleCopyName}
                       />
+                    ))}
+                  </div>
+                )}
+              </div>
 
-                      <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                        Outgoing
+              {/* OUTGOING */}
+              <div className="border-t border-slate-100 p-4 sm:p-5 dark:border-slate-800">
+                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Send
+                      size={14}
+                      className="text-violet-600 dark:text-violet-400"
+                    />
+
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
+                      Outgoing
+                    </span>
+
+                    {activeOutgoing.length > 0 && (
+                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-extrabold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
+                        {activeOutgoing.length} active
                       </span>
+                    )}
 
-                      {activeOutgoing.length > 0 && (
-                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-extrabold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
-                          {activeOutgoing.length} active
-                        </span>
-                      )}
-                    </div>
+                    {completedOutgoing.length > 0 && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                        {completedOutgoing.length} completed
+                      </span>
+                    )}
+
+                    {cancelledOutgoing.length > 0 && (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-extrabold text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                        {cancelledOutgoing.length} cancelled
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {failedOutgoing.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRetryAllFailedOutgoing}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 text-[10px] font-bold text-red-600 transition hover:bg-red-100 active:scale-95 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
+                      >
+                        <RotateCcw size={11} />
+                        Retry all ({failedOutgoing.length})
+                      </button>
+                    )}
+
+                    {completedOutgoing.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearCompletedOutgoing}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600 active:scale-95 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:bg-violet-500/10 dark:hover:text-violet-400"
+                      >
+                        <CheckCircle size={11} />
+                        Clear completed
+                      </button>
+                    )}
+
+                    {(cancelledOutgoing.length > 0 ||
+                      failedOutgoing.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={handleClearCancelledOutgoing}
+                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-[10px] font-bold text-red-500 transition hover:bg-red-50 active:scale-95 dark:border-red-900/50 dark:bg-[#15171d] dark:text-red-400 dark:hover:bg-red-500/10"
+                      >
+                        <Eraser size={11} />
+                        Clear cancelled
+                      </button>
+                    )}
 
                     <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
                       {outgoing.length} files
                     </span>
                   </div>
-
-                  {outgoing.length === 0 ? (
-                    <EmptyQueue
-                      type="outgoing"
-                      onShare={() => fileInputRef.current?.click()}
-                    />
-                  ) : (
-                    <div className="space-y-2">
-                      {outgoing.map((file) => (
-                        <FileRow
-                          key={file.fileId || file.id}
-                          file={file}
-                          direction="outgoing"
-                          onRetry={handleRetry}
-                          onCancel={(id) => handleCancel(id, 'outgoing')}
-                          onRemove={handleRemove}
-                          onCopyName={handleCopyName}
-                        />
-                      ))}
-                    </div>
-                  )}
                 </div>
+
+                {outgoing.length === 0 ? (
+                  <EmptyQueue
+                    type="outgoing"
+                    onShare={() => fileInputRef.current?.click()}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {outgoing.map((file) => (
+                      <FileRow
+                        key={file.fileId || file.id}
+                        file={file}
+                        direction="outgoing"
+                        onRetry={handleRetry}
+                        onCancel={(id) => handleCancel(id, 'outgoing')}
+                        onRemove={handleRemove}
+                        onCopyName={handleCopyName}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
 
