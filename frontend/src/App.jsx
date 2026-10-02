@@ -11,6 +11,9 @@ import JoinRoomPage from './pages/JoinRoomPage';
 import RoomPage from './pages/RoomPage';
 import NotFound from './pages/NotFound';
 import ErrorPage from './pages/ErrorPage';
+import Team from './pages/Team';
+import About from './pages/About';
+
 
 class ErrorBoundary extends Component {
   state = { hasError: false, error: null };
@@ -43,6 +46,9 @@ export default function App() {
                 <Route path="/join" element={<JoinRoomPage />} />
                 <Route path="/room/:roomCode" element={<RoomPage />} />
                 <Route path="*" element={<NotFound />} />
+                <Route path="/team" element={<Team />} />
+                <Route path="/about" element={<About />} />
+                <Route path="/errorpage" element={<ErrorPage />} />
               </Routes>
             </main>
             <Footer />
