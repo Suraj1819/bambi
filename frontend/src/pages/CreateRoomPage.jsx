@@ -36,7 +36,7 @@ import CopyButton from '../components/common/CopyButton';
 ============================================================ */
 
 const FOCUS_RING =
-  'focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/20';
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/25';
 
 const ROOM_FEATURES = [
   {
@@ -104,16 +104,18 @@ function SectionHeader({
   const isEmerald = tone === 'emerald';
 
   return (
-    <div className="flex items-start gap-3.5">
+    <div className="flex items-start gap-3 sm:gap-3.5">
       <div
         className={`
           flex
-          h-11
-          w-11
+          h-10
+          w-10
           shrink-0
           items-center
           justify-center
           rounded-xl
+          sm:h-11
+          sm:w-11
           ${
             isEmerald
               ? 'bg-emerald-50 dark:bg-emerald-500/[0.09]'
@@ -123,7 +125,10 @@ function SectionHeader({
       >
         <Icon
           className={`
-            h-5 w-5
+            h-[18px]
+            w-[18px]
+            sm:h-5
+            sm:w-5
             ${
               isEmerald
                 ? 'text-emerald-600 dark:text-emerald-400'
@@ -134,13 +139,14 @@ function SectionHeader({
         />
       </div>
 
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p
           className={`
-            text-[11px]
+            text-[10px]
             font-semibold
             uppercase
             tracking-[0.12em]
+            sm:text-[11px]
             ${
               isEmerald
                 ? 'text-emerald-600 dark:text-emerald-400'
@@ -151,12 +157,12 @@ function SectionHeader({
           {eyebrow}
         </p>
 
-        <h2 className="mt-1 font-heading text-[21px] font-bold leading-tight tracking-[-0.025em] text-slate-900 dark:text-white sm:text-[22px]">
+        <h2 className="mt-1 font-heading text-[19px] font-bold leading-tight tracking-[-0.025em] text-slate-900 dark:text-white sm:text-[22px]">
           {title}
         </h2>
 
         {description && (
-          <p className="mt-1.5 max-w-[560px] text-[13px] leading-[20px] text-slate-500 dark:text-slate-400">
+          <p className="mt-1.5 max-w-[560px] text-[12.5px] leading-[19px] text-slate-500 dark:text-slate-400 sm:text-[13px] sm:leading-[20px]">
             {description}
           </p>
         )}
@@ -187,7 +193,7 @@ function CreateRoomContent({
       />
 
       {/* PRIMARY CREATE PANEL */}
-      <div className="mt-6 rounded-2xl border border-purple-100 bg-purple-50/60 p-5 dark:border-purple-500/10 dark:bg-purple-500/[0.045] sm:p-6">
+      <div className="mt-5 rounded-2xl border border-purple-100 bg-purple-50/60 p-4 dark:border-purple-500/10 dark:bg-purple-500/[0.045] sm:mt-6 sm:p-6">
         <div className="flex flex-col gap-5">
           <div className="flex items-start gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-purple-600 shadow-sm dark:bg-white/[0.07] dark:text-purple-400">
@@ -197,12 +203,12 @@ function CreateRoomContent({
               />
             </div>
 
-            <div>
-              <p className="text-[14px] font-semibold text-slate-800 dark:text-slate-200">
+            <div className="min-w-0">
+              <p className="text-[13.5px] font-semibold text-slate-800 dark:text-slate-200 sm:text-[14px]">
                 Ready to create a room?
               </p>
 
-              <p className="mt-1 text-[12.5px] leading-5 text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-[12px] leading-5 text-slate-500 dark:text-slate-400 sm:text-[12.5px]">
                 WebDrop will generate a unique 5-character code
                 that you can share with another device.
               </p>
@@ -214,33 +220,30 @@ function CreateRoomContent({
             type="button"
             onClick={onGenerate}
             disabled={loading || !isConnected}
-            className="
-              group
+            className={`
+              ${FOCUS_RING}
               inline-flex
-              h-14
+              min-h-[52px]
               w-full
               items-center
               justify-center
-              gap-2.5
-              rounded-2xl
+              gap-2
+              rounded-xl
               bg-purple-600
-              px-6
+              px-5
               text-[14px]
-              font-bold
+              font-semibold
               text-white
-              shadow-[0_14px_35px_-12px_rgba(124,58,237,0.65)]
-              transition-all
-              duration-200
+              transition-colors
+              duration-150
               hover:bg-purple-700
-              hover:shadow-[0_16px_38px_-12px_rgba(124,58,237,0.72)]
-              focus:outline-none
-              focus-visible:ring-4
-              focus-visible:ring-purple-500/25
-              active:scale-[0.985]
+              active:bg-purple-800
               disabled:cursor-not-allowed
               disabled:opacity-50
-              disabled:shadow-none
-            "
+              sm:min-h-[54px]
+              sm:rounded-2xl
+              sm:text-[14px]
+            `}
           >
             {loading ? (
               <>
@@ -254,7 +257,7 @@ function CreateRoomContent({
               <>
                 Generate room
                 <ArrowRight
-                  className="h-5 w-5 transition-transform duration-200 group-hover:translate-x-0.5"
+                  className="h-5 w-5"
                   strokeWidth={2.4}
                 />
               </>
@@ -262,11 +265,14 @@ function CreateRoomContent({
           </button>
 
           {/* CONNECTION STATUS */}
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <span
                 className={`
-                  h-2 w-2 shrink-0 rounded-full
+                  h-2
+                  w-2
+                  shrink-0
+                  rounded-full
                   ${
                     isConnected
                       ? 'bg-emerald-500'
@@ -275,14 +281,14 @@ function CreateRoomContent({
                 `}
               />
 
-              <p className="truncate text-[12px] text-slate-500 dark:text-slate-400">
+              <p className="truncate text-[11.5px] text-slate-500 dark:text-slate-400 sm:text-[12px]">
                 {isConnected
                   ? 'WebDrop server connected'
                   : 'Connecting to WebDrop server...'}
               </p>
             </div>
 
-            <span className="shrink-0 text-[10.5px] font-medium text-slate-400 dark:text-slate-600">
+            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-600">
               Signaling only
             </span>
           </div>
@@ -290,7 +296,7 @@ function CreateRoomContent({
       </div>
 
       {/* FEATURES */}
-      <div className="mt-5 grid gap-2.5 sm:grid-cols-3">
+      <div className="mt-4 grid gap-2.5 sm:mt-5 sm:grid-cols-3">
         {ROOM_FEATURES.map(({ icon: Icon, title, text }) => (
           <div
             key={title}
@@ -299,9 +305,10 @@ function CreateRoomContent({
               border
               border-slate-100
               bg-slate-50/70
-              p-3.5
+              p-3
               dark:border-white/[0.05]
               dark:bg-white/[0.025]
+              sm:p-3.5
             "
           >
             <div className="flex items-center gap-2">
@@ -325,13 +332,13 @@ function CreateRoomContent({
       </div>
 
       {/* PRIVACY */}
-      <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-4 py-3.5 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04]">
+      <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-3.5 py-3 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04] sm:px-4 sm:py-3.5">
         <ShieldCheck
           className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
           strokeWidth={2}
         />
 
-        <p className="text-[11.5px] leading-[18px] text-slate-500 dark:text-slate-400">
+        <p className="text-[11px] leading-[18px] text-slate-500 dark:text-slate-400 sm:text-[11.5px]">
           WebDrop does not upload or store your files on the
           server. The server is used only to help both devices
           establish a connection.
@@ -369,47 +376,98 @@ function GeneratedRoomContent({
           ROOM CODE HERO
       ====================================================== */}
 
-      <div className="mt-6">
-        <div className="mb-2.5 flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-slate-400 dark:text-slate-500">
+      <div className="mt-5 sm:mt-6">
+        <div className="mb-2.5 flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-slate-400 dark:text-slate-500 sm:text-[11px]">
               Room code
             </p>
 
-            <p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-600">
+            <p className="mt-0.5 text-[10px] leading-4 text-slate-400 dark:text-slate-600 sm:text-[11px]">
               Share this code with the other device
             </p>
           </div>
 
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/70 bg-emerald-50 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/[0.08] dark:text-emerald-400">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200/70 bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/[0.08] dark:text-emerald-400 sm:px-2.5 sm:py-1.5 sm:text-[10px]">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             Active
           </span>
         </div>
 
-        <div className="rounded-[22px] border border-purple-200/80 bg-gradient-to-br from-purple-50 via-purple-50/80 to-indigo-50/60 p-4 dark:border-purple-500/20 dark:from-purple-500/[0.09] dark:via-purple-500/[0.06] dark:to-indigo-500/[0.05] sm:p-5">
-          <div className="flex flex-col gap-4">
-            <div className="flex min-h-[92px] items-center justify-between gap-4 rounded-2xl border border-purple-200/60 bg-white/70 px-4 py-3 shadow-sm dark:border-purple-500/10 dark:bg-white/[0.035] sm:min-h-[104px] sm:px-5">
-              <p className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-[38px] font-black tracking-[0.14em] text-purple-700 dark:text-purple-300 sm:text-[48px] sm:tracking-[0.2em]">
+        {/* ====================================================
+            RESPONSIVE CODE CARD
+        ==================================================== */}
+
+        <div className="rounded-[20px] border border-purple-200/80 bg-purple-50/70 p-3.5 dark:border-purple-500/20 dark:bg-purple-500/[0.07] sm:rounded-[22px] sm:p-5">
+          <div
+            className="
+              flex
+              flex-col
+              gap-3
+              rounded-[16px]
+              border
+              border-purple-200/60
+              bg-white/80
+              p-3
+              dark:border-purple-500/10
+              dark:bg-white/[0.035]
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+              sm:gap-4
+              sm:p-4
+            "
+          >
+            {/* ROOM CODE */}
+
+            <div className="min-w-0 flex-1 overflow-hidden text-center sm:text-left">
+              <p
+                className="
+                  overflow-hidden
+                  whitespace-nowrap
+                  font-mono
+                  text-[30px]
+                  font-black
+                  leading-none
+                  tracking-[0.08em]
+                  text-purple-700
+                  dark:text-purple-300
+                  min-[380px]:text-[34px]
+                  min-[430px]:text-[36px]
+                  sm:text-[38px]
+                  sm:tracking-[0.12em]
+                  md:text-[42px]
+                  lg:text-[46px]
+                  xl:text-[48px]
+                  xl:tracking-[0.16em]
+                "
+              >
                 {roomCode}
               </p>
+            </div>
 
+            {/* COPY BUTTON */}
+
+            <div className="flex shrink-0 justify-center sm:justify-end">
               <CopyButton
                 label="Copy code"
                 value={roomCode}
+                fullWidth
               />
             </div>
+          </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-[11px] leading-4 text-slate-500 dark:text-slate-400">
-                The receiving device can enter this code on
-                WebDrop.
-              </p>
+          {/* CODE INFORMATION */}
 
-              <span className="shrink-0 text-[10px] font-medium text-purple-500 dark:text-purple-400">
-                5 characters
-              </span>
-            </div>
+          <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <p className="text-center text-[10.5px] leading-4 text-slate-500 dark:text-slate-400 sm:text-left sm:text-[11px]">
+              The receiving device can enter this code on
+              WebDrop.
+            </p>
+
+            <span className="text-center text-[9.5px] font-medium text-purple-500 dark:text-purple-400 sm:shrink-0 sm:text-right sm:text-[10px]">
+              5 characters
+            </span>
           </div>
         </div>
       </div>
@@ -419,68 +477,71 @@ function GeneratedRoomContent({
       ====================================================== */}
 
       <div className="mt-5">
-        <div className="mb-2.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+        <div className="mb-2.5 flex items-center justify-between gap-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 sm:text-[11px]">
             Join link
           </span>
 
-          <span className="text-[10.5px] text-slate-400 dark:text-slate-600">
+          <span className="text-[9.5px] text-slate-400 dark:text-slate-600 sm:text-[10.5px]">
             Direct access
           </span>
         </div>
 
-        <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2.5 dark:border-white/[0.07] dark:bg-white/[0.025] sm:flex-row sm:items-center">
-          <div className="min-w-0 flex-1 px-2 py-1">
-            <p className="truncate text-[12px] text-slate-500 dark:text-slate-400">
-              {joinUrl}
-            </p>
-          </div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-white/[0.07] dark:bg-white/[0.025]">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="min-w-0 flex-1 px-1.5 py-1 sm:px-2">
+              <p className="truncate text-[10.5px] text-slate-500 dark:text-slate-400 sm:text-[12px]">
+                {joinUrl}
+              </p>
+            </div>
 
-          <div className="flex shrink-0 gap-2">
-            <CopyButton
-              label="Copy link"
-              value={joinUrl}
-            />
-
-            <button
-              type="button"
-              onClick={onOpenJoinLink}
-              className={`
-                inline-flex
-                h-10
-                items-center
-                justify-center
-                gap-1.5
-                rounded-xl
-                border
-                border-slate-200
-                bg-white
-                px-3.5
-                text-[12px]
-                font-semibold
-                text-slate-600
-                transition-all
-                hover:border-purple-300
-                hover:bg-purple-50
-                hover:text-purple-700
-                dark:border-white/[0.09]
-                dark:bg-white/[0.035]
-                dark:text-slate-300
-                dark:hover:border-purple-500/30
-                dark:hover:bg-purple-500/[0.06]
-                dark:hover:text-purple-300
-                ${FOCUS_RING}
-              `}
-              aria-label="Open join link"
-            >
-              <ExternalLink
-                className="h-3.5 w-3.5"
-                strokeWidth={2}
+            <div className="flex shrink-0 gap-1.5">
+              <CopyButton
+                label="Copy link"
+                value={joinUrl}
               />
-              <span className="hidden sm:inline">
-                Open
-              </span>
-            </button>
+
+              <button
+                type="button"
+                onClick={onOpenJoinLink}
+                className={`
+                  ${FOCUS_RING}
+                  inline-flex
+                  h-10
+                  items-center
+                  justify-center
+                  gap-1.5
+                  rounded-xl
+                  border
+                  border-slate-200
+                  bg-white
+                  px-3
+                  text-[12px]
+                  font-semibold
+                  text-slate-600
+                  transition-colors
+                  hover:border-purple-300
+                  hover:bg-purple-50
+                  hover:text-purple-700
+                  dark:border-white/[0.09]
+                  dark:bg-white/[0.035]
+                  dark:text-slate-300
+                  dark:hover:border-purple-500/30
+                  dark:hover:bg-purple-500/[0.06]
+                  dark:hover:text-purple-300
+                `}
+                aria-label="Open join link"
+              >
+                <ExternalLink
+                  className="h-3.5 w-3.5"
+                  strokeWidth={2}
+                />
+
+                <span className="hidden sm:inline">
+                  Open
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -489,16 +550,18 @@ function GeneratedRoomContent({
           MAIN ACTIONS
       ====================================================== */}
 
-      <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-[1fr_auto]">
+      <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
         {/* OPEN TRANSFER */}
+
         <button
           type="button"
           onClick={onOpenRoom}
-          className="
+          className={`
+            ${FOCUS_RING}
             group
             inline-flex
-            h-13
-            min-h-[52px]
+            min-h-[50px]
+            w-full
             items-center
             justify-center
             gap-2
@@ -506,39 +569,38 @@ function GeneratedRoomContent({
             bg-purple-600
             px-5
             text-[13px]
-            font-bold
+            font-semibold
             text-white
-            shadow-[0_12px_30px_-13px_rgba(124,58,237,0.75)]
-            transition-all
-            duration-200
+            transition-colors
+            duration-150
             hover:bg-purple-700
-            hover:shadow-[0_14px_34px_-13px_rgba(124,58,237,0.8)]
-            focus:outline-none
-            focus-visible:ring-4
-            focus-visible:ring-purple-500/25
-            active:scale-[0.98]
-          "
+            active:bg-purple-800
+            sm:min-h-[52px]
+          `}
         >
           <Radio
             className="h-[17px] w-[17px]"
             strokeWidth={2.2}
           />
 
-          Open transfer room
+          <span>Open transfer room</span>
 
           <ArrowRight
-            className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+            className="h-4 w-4"
             strokeWidth={2.4}
           />
         </button>
 
-        {/* CANCEL — BESIDE OPEN */}
+        {/* CANCEL */}
+
         <button
           type="button"
           onClick={onCancelRoom}
           className={`
+            ${FOCUS_RING}
             inline-flex
-            min-h-[52px]
+            min-h-[48px]
+            w-full
             items-center
             justify-center
             gap-2
@@ -550,7 +612,7 @@ function GeneratedRoomContent({
             text-[12.5px]
             font-semibold
             text-red-500
-            transition-all
+            transition-colors
             hover:border-red-300
             hover:bg-red-50
             hover:text-red-600
@@ -560,7 +622,8 @@ function GeneratedRoomContent({
             dark:hover:border-red-500/25
             dark:hover:bg-red-500/[0.06]
             dark:hover:text-red-300
-            ${FOCUS_RING}
+            sm:min-h-[52px]
+            sm:w-auto
           `}
         >
           <X
@@ -573,15 +636,20 @@ function GeneratedRoomContent({
       </div>
 
       {/* SHARE + NEW ROOM */}
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+
+      <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <button
           type="button"
           onClick={onShare}
           className={`
+            ${FOCUS_RING}
             inline-flex
+            min-h-[36px]
             items-center
+            justify-center
             gap-1.5
             rounded-lg
+            px-2
             text-[12px]
             font-medium
             text-slate-500
@@ -589,7 +657,7 @@ function GeneratedRoomContent({
             hover:text-purple-600
             dark:text-slate-400
             dark:hover:text-purple-400
-            ${FOCUS_RING}
+            sm:justify-start
           `}
         >
           <Share2
@@ -604,10 +672,14 @@ function GeneratedRoomContent({
           type="button"
           onClick={onNewRoom}
           className={`
+            ${FOCUS_RING}
             inline-flex
+            min-h-[36px]
             items-center
+            justify-center
             gap-1.5
             rounded-lg
+            px-2
             text-[12px]
             font-medium
             text-slate-400
@@ -615,7 +687,7 @@ function GeneratedRoomContent({
             hover:text-purple-600
             dark:text-slate-500
             dark:hover:text-purple-400
-            ${FOCUS_RING}
+            sm:justify-start
           `}
         >
           <RefreshCw
@@ -628,18 +700,19 @@ function GeneratedRoomContent({
       </div>
 
       {/* SECURITY */}
-      <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-4 py-3.5 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04]">
+
+      <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-3.5 py-3 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04] sm:px-4 sm:py-3.5">
         <ShieldCheck
           className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
           strokeWidth={2}
         />
 
-        <div>
-          <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[11.5px]">
             Your files stay between devices
           </p>
 
-          <p className="mt-0.5 text-[11px] leading-[18px] text-slate-500 dark:text-slate-400">
+          <p className="mt-0.5 text-[10.5px] leading-[17px] text-slate-500 dark:text-slate-400 sm:text-[11px] sm:leading-[18px]">
             WebDrop uses the server for signaling only. Your files
             are not uploaded or stored on the server.
           </p>
@@ -664,33 +737,45 @@ function GeneratedQR({ roomCode, joinUrl }) {
       />
 
       {/* QR */}
-      <div className="mt-6 flex justify-center">
-        <div className="rounded-[24px] border border-slate-200 bg-white p-3.5 shadow-[0_10px_32px_rgba(15,23,42,0.07)] dark:border-white/[0.08]">
+
+      <div className="mt-5 flex justify-center sm:mt-6">
+        <div className="rounded-[20px] border border-slate-200 bg-white p-3 dark:border-white/[0.08] sm:rounded-[24px] sm:p-3.5">
           <QRCodeSVG
             value={joinUrl}
             level="M"
             includeMargin
-            className="h-[190px] w-[190px] sm:h-[205px] sm:w-[205px]"
+            className="
+              h-[160px]
+              w-[160px]
+              min-[380px]:h-[175px]
+              min-[380px]:w-[175px]
+              sm:h-[190px]
+              sm:w-[190px]
+              md:h-[205px]
+              md:w-[205px]
+            "
           />
         </div>
       </div>
 
       {/* ROOM */}
-      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 px-4 py-3.5 text-center dark:border-white/[0.05] dark:bg-white/[0.025]">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+
+      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-center dark:border-white/[0.05] dark:bg-white/[0.025] sm:px-4 sm:py-3.5">
+        <p className="text-[9.5px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 sm:text-[10px]">
           Room
         </p>
 
-        <p className="mt-1 font-mono text-[21px] font-bold tracking-[0.2em] text-slate-800 dark:text-slate-200">
+        <p className="mt-1 font-mono text-[19px] font-bold tracking-[0.14em] text-slate-800 dark:text-slate-200 sm:text-[21px] sm:tracking-[0.2em]">
           {roomCode}
         </p>
 
-        <p className="mt-1 text-[11px] leading-4 text-slate-400 dark:text-slate-500">
+        <p className="mt-1 text-[10.5px] leading-4 text-slate-400 dark:text-slate-500 sm:text-[11px]">
           Scan to open the WebDrop join page.
         </p>
       </div>
 
       {/* FEATURES */}
+
       <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
         {ROOM_FEATURES.map(({ icon: Icon, title, text }) => (
           <div
@@ -703,10 +788,12 @@ function GeneratedQR({ roomCode, joinUrl }) {
               border
               border-slate-100
               bg-white/70
-              px-3.5
-              py-3
+              px-3
+              py-2.5
               dark:border-white/[0.05]
               dark:bg-white/[0.025]
+              sm:px-3.5
+              sm:py-3
             "
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-white/[0.05]">
@@ -717,11 +804,11 @@ function GeneratedQR({ roomCode, joinUrl }) {
             </div>
 
             <div className="min-w-0">
-              <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200">
+              <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[11.5px]">
                 {title}
               </p>
 
-              <p className="mt-0.5 text-[10.5px] leading-[17px] text-slate-400 dark:text-slate-500">
+              <p className="mt-0.5 text-[10px] leading-[16px] text-slate-400 dark:text-slate-500 sm:text-[10.5px] sm:leading-[17px]">
                 {text}
               </p>
             </div>
@@ -767,7 +854,7 @@ function HowItWorks() {
         description="No account is required, and your files are never stored on the server."
       />
 
-      <div className="mt-6 space-y-2.5">
+      <div className="mt-5 space-y-2.5 sm:mt-6">
         {steps.map(
           ({ number, icon: Icon, title, text }) => (
             <div
@@ -780,10 +867,12 @@ function HowItWorks() {
                 border
                 border-slate-100
                 bg-slate-50/70
-                px-3.5
-                py-3.5
+                px-3
+                py-3
                 dark:border-white/[0.05]
                 dark:bg-white/[0.025]
+                sm:px-3.5
+                sm:py-3.5
               "
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
@@ -794,15 +883,15 @@ function HowItWorks() {
               </div>
 
               <div className="min-w-0">
-                <p className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200">
-                  <span className="mr-1.5 font-mono text-[10px] text-slate-300 dark:text-slate-600">
+                <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 sm:text-[12.5px]">
+                  <span className="mr-1.5 font-mono text-[9px] text-slate-300 dark:text-slate-600 sm:text-[10px]">
                     {number}
                   </span>
 
                   {title}
                 </p>
 
-                <p className="mt-0.5 text-[11px] leading-[18px] text-slate-400 dark:text-slate-500">
+                <p className="mt-0.5 text-[10.5px] leading-[17px] text-slate-400 dark:text-slate-500 sm:text-[11px] sm:leading-[18px]">
                   {text}
                 </p>
               </div>
@@ -812,9 +901,10 @@ function HowItWorks() {
       </div>
 
       {/* DETAILS */}
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
-        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-white/[0.05] dark:bg-white/[0.025]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
+
+      <div className="mt-3 grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
+        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-white/[0.05] dark:bg-white/[0.025] sm:p-3.5">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500 sm:text-[10px]">
             Room lifetime
           </p>
 
@@ -824,14 +914,14 @@ function HowItWorks() {
               strokeWidth={1.9}
             />
 
-            <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+            <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[12px]">
               30 minutes
             </p>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3.5 dark:border-white/[0.05] dark:bg-white/[0.025]">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
+        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-white/[0.05] dark:bg-white/[0.025] sm:p-3.5">
+          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500 sm:text-[10px]">
             Devices
           </p>
 
@@ -841,7 +931,7 @@ function HowItWorks() {
               strokeWidth={1.9}
             />
 
-            <p className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">
+            <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[12px]">
               2 maximum
             </p>
           </div>
@@ -849,18 +939,19 @@ function HowItWorks() {
       </div>
 
       {/* PRIVACY */}
-      <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-4 py-3.5 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04]">
+
+      <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-3.5 py-3 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04] sm:px-4 sm:py-3.5">
         <ShieldCheck
           className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
           strokeWidth={2}
         />
 
-        <div>
-          <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[11.5px]">
             Privacy by design
           </p>
 
-          <p className="mt-0.5 text-[10.5px] leading-[17px] text-slate-400 dark:text-slate-500">
+          <p className="mt-0.5 text-[10px] leading-[16px] text-slate-400 dark:text-slate-500 sm:text-[10.5px] sm:leading-[17px]">
             The signaling server helps devices find each other but
             does not receive or store your files.
           </p>
@@ -1131,7 +1222,10 @@ export default function CreateRoomPage() {
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-[#FBFAFF] text-slate-900 transition-colors dark:bg-surface dark:text-white">
-      {/* BACKGROUND */}
+      {/* ======================================================
+          BACKGROUND
+      ====================================================== */}
+
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute right-[-180px] top-[-180px] h-[420px] w-[420px] rounded-full bg-purple-500/[0.065] blur-3xl dark:bg-purple-500/[0.075]" />
 
@@ -1140,25 +1234,27 @@ export default function CreateRoomPage() {
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent" />
       </div>
 
-      <main className="relative mx-auto w-full max-w-[1280px] px-4 pb-8 pt-6 sm:px-6 sm:pb-10 sm:pt-8 lg:px-8">
+      <main className="relative mx-auto w-full max-w-[1280px] px-3.5 pb-8 pt-5 min-[400px]:px-4 sm:px-6 sm:pb-10 sm:pt-8 lg:px-8">
         <section className="mx-auto max-w-[1120px]">
           {/* ==================================================
               TOP INTRO
           ================================================== */}
 
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="max-w-[720px]">
+            <div className="min-w-0 max-w-[720px]">
               {/* EYEBROW */}
-              <div className="inline-flex items-center gap-2 rounded-full border border-purple-200/80 bg-purple-50/80 px-3.5 py-1.5 dark:border-purple-500/20 dark:bg-purple-500/[0.08]">
+
+              <div className="inline-flex items-center gap-2 rounded-full border border-purple-200/80 bg-purple-50/80 px-3 py-1.5 dark:border-purple-500/20 dark:bg-purple-500/[0.08] sm:px-3.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
 
-                <span className="text-[12px] font-semibold text-purple-600 dark:text-purple-400">
+                <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 sm:text-[12px]">
                   Send files
                 </span>
               </div>
 
               {/* TITLE */}
-              <h1 className="mt-3.5 font-heading text-[35px] font-extrabold leading-[1.05] tracking-[-0.045em] text-slate-900 dark:text-white sm:text-[44px] lg:text-[50px]">
+
+              <h1 className="mt-3 font-heading text-[30px] font-extrabold leading-[1.06] tracking-[-0.045em] text-slate-900 dark:text-white min-[380px]:text-[33px] sm:mt-3.5 sm:text-[44px] lg:text-[50px]">
                 Create a private
                 <span className="block text-purple-600 dark:text-purple-400">
                   transfer room.
@@ -1166,7 +1262,8 @@ export default function CreateRoomPage() {
               </h1>
 
               {/* DESCRIPTION */}
-              <p className="mt-4 max-w-[650px] text-[14.5px] leading-6 text-slate-500 dark:text-slate-400 sm:text-[15px] sm:leading-7">
+
+              <p className="mt-3.5 max-w-[650px] text-[13px] leading-5 text-slate-500 dark:text-slate-400 min-[380px]:text-[13.5px] sm:mt-4 sm:text-[15px] sm:leading-7">
                 Generate a temporary room code and share it with
                 another device to connect directly. No account and
                 no upload to a server.
@@ -1174,6 +1271,7 @@ export default function CreateRoomPage() {
             </div>
 
             {/* CONNECTION BADGE */}
+
             <div className="hidden shrink-0 sm:block">
               <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3.5 shadow-[0_4px_18px_rgba(15,23,42,0.03)] backdrop-blur-sm dark:border-white/[0.06] dark:bg-white/[0.025]">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-500/10">
@@ -1197,16 +1295,39 @@ export default function CreateRoomPage() {
           </div>
 
           {/* ==================================================
+              MOBILE CONNECTION INFO
+          ================================================== */}
+
+          <div className="mt-4 sm:hidden">
+            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
+              <ShieldCheck
+                className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400"
+                strokeWidth={2}
+              />
+
+              <div className="min-w-0">
+                <p className="text-[9.5px] font-medium text-slate-400 dark:text-slate-500">
+                  Connection
+                </p>
+
+                <p className="truncate text-[11.5px] font-semibold text-slate-700 dark:text-slate-200">
+                  Peer-to-peer transfer
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* ==================================================
               MAIN GRID
           ================================================== */}
 
-          <div className="mt-7 grid gap-5 lg:grid-cols-[1.28fr_0.92fr] lg:items-start">
+          <div className="mt-5 grid gap-4 sm:mt-7 sm:gap-5 lg:grid-cols-[1.28fr_0.92fr] lg:items-start">
             {/* =================================================
                 LEFT
             ================================================= */}
 
-            <div className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.025)] dark:border-white/[0.06] dark:bg-surface-card dark:shadow-none">
-              <div className="p-5 sm:p-7">
+            <div className="min-w-0 overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.025)] dark:border-white/[0.06] dark:bg-surface-card dark:shadow-none sm:rounded-[26px]">
+              <div className="p-4 min-[400px]:p-5 sm:p-7">
                 {!roomCode ? (
                   <CreateRoomContent
                     loading={loading}
@@ -1232,7 +1353,7 @@ export default function CreateRoomPage() {
                 RIGHT
             ================================================= */}
 
-            <aside className="rounded-[26px] border border-slate-200/80 bg-white p-5 shadow-[0_8px_30px_rgba(15,23,42,0.025)] dark:border-white/[0.06] dark:bg-surface-card dark:shadow-none sm:p-6">
+            <aside className="min-w-0 rounded-[22px] border border-slate-200/80 bg-white p-4 shadow-[0_8px_30px_rgba(15,23,42,0.025)] dark:border-white/[0.06] dark:bg-surface-card dark:shadow-none min-[400px]:p-5 sm:rounded-[26px] sm:p-6">
               {roomCode ? (
                 <GeneratedQR
                   roomCode={roomCode}
@@ -1248,24 +1369,27 @@ export default function CreateRoomPage() {
               BOTTOM NAV
           ================================================== */}
 
-          <div className="mt-6 border-t border-slate-200/70 pt-5 dark:border-white/[0.06]">
+          <div className="mt-5 border-t border-slate-200/70 pt-4 dark:border-white/[0.06] sm:mt-6 sm:pt-5">
             <button
               type="button"
               onClick={() => navigate('/')}
               className={`
+                ${FOCUS_RING}
                 group
                 inline-flex
+                min-h-[36px]
                 items-center
                 gap-2
                 rounded-lg
-                text-[13px]
+                px-2
+                text-[12px]
                 font-medium
                 text-slate-500
                 transition-colors
                 hover:text-slate-900
                 dark:text-slate-400
                 dark:hover:text-white
-                ${FOCUS_RING}
+                sm:text-[13px]
               `}
             >
               <ArrowLeft
