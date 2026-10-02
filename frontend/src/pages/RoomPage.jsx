@@ -56,6 +56,8 @@ import {
   Gauge,
   Info,
   Link as LinkIcon,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 import {
@@ -71,6 +73,9 @@ import { useFileTransfer } from '../hooks/useFileTransfer';
 import { toast } from '../components/common/ToastContainer';
 import PeerRadar from '../components/common/PeerRadar';
 import ShareModal from '../components/common/ShareModal';
+import ResizableSidebarLayout, {
+  useResizableSidebar,
+} from '../components/common/ResizableSidebarLayout';
 
 import {
   detectDevice,
@@ -1062,6 +1067,141 @@ function ConfirmModal({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Removed / Kicked modal (intermediate phase)                                */
+/* -------------------------------------------------------------------------- */
+
+function KickedModal({ open, reason, roomCode, onConfirm }) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKey = (e) => {
+      if (e.key === 'Enter' || e.key === 'Escape') onConfirm?.();
+    };
+
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [open, onConfirm]);
+
+  if (!open) return null;
+
+  const isEnded = reason === 'ended';
+  const isKicked = reason === 'kicked';
+
+  const title = isEnded
+    ? 'Room Ended'
+    : isKicked
+      ? 'Removed from Room'
+      : 'Disconnected';
+
+  const message = isEnded
+    ? 'The host has ended this room. All transfers have been stopped.'
+    : isKicked
+      ? 'The host removed you from this room. You can no longer send or receive files.'
+      : 'You have been disconnected from this room.';
+
+  const subMessage = isEnded
+    ? 'You can create a new room or join another one.'
+    : isKicked
+      ? 'If you believe this was a mistake, ask the host for a new invite.'
+      : 'Please rejoin to continue.';
+
+  const iconBg = isEnded
+    ? 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+    : isKicked
+      ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+      : 'bg-slate-100 text-slate-500 dark:bg-slate-800/80 dark:text-slate-400';
+
+  const Icon = isEnded ? Power : isKicked ? LogOut : XCircle;
+
+  return (
+    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/70 px-4 py-6 backdrop-blur-md">
+      <div className="w-full max-w-sm overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-[#0f1115]">
+        <div
+          className={`h-1.5 w-full ${
+            isEnded
+              ? 'bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500'
+              : isKicked
+                ? 'bg-gradient-to-r from-red-400 via-red-500 to-rose-500'
+                : 'bg-gradient-to-r from-slate-300 via-slate-400 to-slate-500'
+          }`}
+        />
+
+        <div className="p-6">
+          <div
+            className={`mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ${iconBg}`}
+          >
+            <Icon size={26} />
+          </div>
+
+          <p
+            className={`text-center text-[10px] font-extrabold uppercase tracking-[0.2em] ${
+              isEnded
+                ? 'text-amber-600 dark:text-amber-400'
+                : isKicked
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            WebDrop session
+          </p>
+
+          <h2 className="mt-2 text-center text-lg font-extrabold text-slate-900 dark:text-white">
+            {title}
+          </h2>
+
+          <p className="mt-2 text-center text-sm leading-6 text-slate-500 dark:text-slate-400">
+            {message}
+          </p>
+
+          <p className="mt-1.5 text-center text-xs leading-5 text-slate-400 dark:text-slate-500">
+            {subMessage}
+          </p>
+
+          {roomCode && (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 dark:border-slate-800 dark:bg-slate-900/60">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Room code
+                  </p>
+
+                  <p className="mt-1 font-mono text-base font-extrabold tracking-[0.2em] text-slate-700 dark:text-slate-200">
+                    {roomCode}
+                  </p>
+                </div>
+
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${
+                    isEnded
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                      : isKicked
+                        ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-400'
+                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800/80 dark:text-slate-300'
+                  }`}
+                >
+                  {isEnded ? 'Ended' : isKicked ? 'Kicked' : 'Closed'}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-slate-100 p-4 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-xs font-bold text-white shadow-sm transition hover:bg-violet-700"
+          >
+            <Home size={15} />
+            Back to Home
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* Main                                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -1088,6 +1228,14 @@ export default function RoomPage() {
   const deviceInfo = ctxDeviceInfo || detectDeviceInfo();
   const roomCode = (urlCode || '').toUpperCase();
 
+  /**
+   * Left sidebar (Peer radar + details):
+   * - xl and up: flex layout, drag the handle to resize, collapse with the
+   *   chevron button. Width and collapsed state are remembered.
+   * - Below xl: sidebar stacks above the main content (no resize/collapse).
+   */
+  const sidebar = useResizableSidebar();
+
   const [joining, setJoining] = useState(true);
   const [roomError, setRoomError] = useState('');
   const [roomExpired, setRoomExpired] = useState(false);
@@ -1101,6 +1249,12 @@ export default function RoomPage() {
 
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+
+  /**
+   * Intermediate phase for guests:
+   * null | 'kicked' | 'ended'
+   */
+  const [removedPhase, setRemovedPhase] = useState(null);
 
   const fileInputRef = useRef(null);
   const folderInputRef = useRef(null);
@@ -1307,12 +1461,15 @@ export default function RoomPage() {
       toast.error('This room has expired.');
     };
 
+    /**
+     * Host ended the room.
+     * - Guest should see an intermediate phase.
+     * - Host navigates directly to / (they triggered it themselves).
+     */
     const handleRoomEnded = () => {
       if (disconnectingRef.current) return;
 
-      disconnectingRef.current = true;
       clearHostToken(roomCode);
-      toast.error('The host ended this room.');
 
       try {
         socket.emit('leave-room', { roomCode });
@@ -1320,15 +1477,25 @@ export default function RoomPage() {
         // ignore
       }
 
-      navigate('/', { replace: true });
+      if (role === 'host') {
+        // Host: straight to /
+        disconnectingRef.current = true;
+        navigate('/', { replace: true });
+        return;
+      }
+
+      // Guest: show intermediate "room ended" phase
+      setRemovedPhase('ended');
     };
 
+    /**
+     * Guest was kicked by the host.
+     * - Show an intermediate phase for the guest.
+     */
     const handleKicked = () => {
       if (disconnectingRef.current) return;
 
-      disconnectingRef.current = true;
       clearHostToken(roomCode);
-      toast.error('You were removed from this room.');
 
       try {
         socket.emit('leave-room', { roomCode });
@@ -1336,7 +1503,8 @@ export default function RoomPage() {
         // ignore
       }
 
-      navigate('/', { replace: true });
+      // Guest: show intermediate "kicked" phase
+      setRemovedPhase('kicked');
     };
 
     socket.on('room-state', handleUsers);
@@ -1357,7 +1525,7 @@ export default function RoomPage() {
       socket.off('kicked', handleKicked);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, roomCode, navigate]);
+  }, [socket, roomCode, navigate, role]);
 
   const requestNotifications = useCallback(async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -1512,7 +1680,8 @@ export default function RoomPage() {
   );
 
   /* ------------------------------------------------------------------------ */
-  /* End Room — host kills the room, everyone goes to /                       */
+  /* End Room — host ends the room, everyone goes to /                        */
+  /* Host navigates directly. Guest gets intermediate phase (via socket).    */
   /* ------------------------------------------------------------------------ */
   const performEndRoom = useCallback(() => {
     if (role !== 'host' || !socket) return;
@@ -1534,6 +1703,7 @@ export default function RoomPage() {
           // ignore
         }
 
+        // Host: straight to /
         navigate('/', { replace: true });
       },
     );
@@ -1545,7 +1715,8 @@ export default function RoomPage() {
   }, [role, socket]);
 
   /* ------------------------------------------------------------------------ */
-  /* Leave Room — user leaves, room stays alive, can rejoin                   */
+  /* Leave Room — user leaves, room stays alive                              */
+  /* Host & Guest: both navigate directly to /.                              */
   /* ------------------------------------------------------------------------ */
   const performLeaveRoom = useCallback(() => {
     disconnectingRef.current = true;
@@ -1556,12 +1727,23 @@ export default function RoomPage() {
       // ignore
     }
 
+    // Both host and guest: straight to /
     navigate('/', { replace: true });
   }, [socket, roomCode, navigate]);
 
   const handleLeaveRoom = useCallback(() => {
     setConfirmLeaveOpen(true);
   }, []);
+
+  /**
+   * Guest confirms from the intermediate kicked/ended screen.
+   * Then navigates to /.
+   */
+  const handleRemovedConfirm = useCallback(() => {
+    disconnectingRef.current = true;
+    setRemovedPhase(null);
+    navigate('/', { replace: true });
+  }, [navigate]);
 
   const inviteUrl = useMemo(() => {
     if (typeof window === 'undefined') {
@@ -1621,7 +1803,7 @@ export default function RoomPage() {
     [copyText],
   );
 
-  /* Share button -> WhatsApp / Facebook / Telegram ... wali window kholta hai */
+  /* Share button -> opens the WhatsApp / Facebook / Telegram ... window */
   const handleShare = useCallback(() => {
     setShowShare(true);
   }, []);
@@ -1929,7 +2111,7 @@ export default function RoomPage() {
     }
   }, []);
 
-  // FileRow 'incoming' / 'outgoing' bhejta hai, hook ko 'in' / 'out' chahiye
+  // FileRow sends 'incoming' / 'outgoing', the hook expects 'in' / 'out'
   const handleRemove = useCallback((fileId, direction) => {
     if (!fileId) return;
     const dir = direction === 'incoming' || direction === 'in' ? 'in' : 'out';
@@ -2054,7 +2236,7 @@ export default function RoomPage() {
     return '—';
   }, [expiresAt, createdAt]);
 
-  // Peer radar ke bubbles ki direction: 'out' | 'in' | 'both' | null
+  // Direction of the peer radar bubbles: 'out' | 'in' | 'both' | null
   const radarFlow = useMemo(() => {
     const sending = activeOutgoing.length > 0;
     const receiving = activeIncoming.length > 0;
@@ -2075,6 +2257,20 @@ export default function RoomPage() {
     peer?.deviceInfo || {},
     peer?.deviceName || '',
   );
+
+  /* ---------------------------------------------------------------------- */
+  /* Intermediate phase for kicked / ended guests                           */
+  /* ---------------------------------------------------------------------- */
+  if (removedPhase) {
+    return (
+      <KickedModal
+        open={true}
+        reason={removedPhase}
+        roomCode={roomCode}
+        onConfirm={handleRemovedConfirm}
+      />
+    );
+  }
 
   if (joining) {
     return (
@@ -2370,6 +2566,27 @@ export default function RoomPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              {/* Sidebar toggle: only meaningful on xl and up */}
+              <button
+                type="button"
+                onClick={sidebar.toggleCollapsed}
+                aria-expanded={!sidebar.sidebarCollapsed}
+                aria-controls="app-sidebar"
+                title={
+                  sidebar.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
+                }
+                className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#0f1115] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400 xl:inline-flex"
+              >
+                {sidebar.sidebarCollapsed ? (
+                  <PanelLeftOpen size={14} />
+                ) : (
+                  <PanelLeftClose size={14} />
+                )}
+                <span>
+                  {sidebar.sidebarCollapsed ? 'Show panel' : 'Hide panel'}
+                </span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleCopyRoom}
@@ -2520,7 +2737,6 @@ export default function RoomPage() {
               }`}
               role={lowTime ? 'alert' : undefined}
             >
-              {/* Circle icon: 10 min se kam bachne par red alert icon ban kar blink karta hai */}
               <span
                 className={`relative flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
                   lowTime
@@ -2586,122 +2802,128 @@ export default function RoomPage() {
       </header>
 
       <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="space-y-5">
-            <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
-              <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-                <div className="flex items-center justify-between">
+        <ResizableSidebarLayout
+          controller={sidebar}
+          sidebar={
+            <aside className="min-h-0 space-y-5">
+              <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+                <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-600 dark:text-violet-400">
+                        Live topology
+                      </p>
+
+                      <h2 className="mt-1 text-base font-bold text-slate-900 dark:text-white">
+                        Peer radar
+                      </h2>
+                    </div>
+
+                    <div
+                      className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                        connected
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+                          : 'bg-slate-100 text-slate-500 dark:bg-slate-800/80 dark:text-slate-400'
+                      }`}
+                    >
+                      {connected ? <Wifi size={16} /> : <Activity size={16} />}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4">
+                  <PeerRadar
+                    role={role}
+                    peer={peer}
+                    peerVisible={peerVisible}
+                    peerReveal={peerReveal}
+                    connected={connected}
+                    flow={radarFlow}
+                    connectionState={webrtc.connectionState}
+                    deviceName={deviceName}
+                    deviceInfo={deviceInfo}
+                    YouIcon={YouIcon}
+                    PeerIcon={PeerIcon}
+                    onKickPeer={handleKickPeer}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <ShieldCheck size={17} />
+                  </div>
+
                   <div>
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-600 dark:text-violet-400">
-                      Live topology
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      Direct Encrypted Channel
                     </p>
 
-                    <h2 className="mt-1 text-base font-bold text-slate-900 dark:text-white">
-                      Peer radar
-                    </h2>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Browser-to-browser connection
+                    </p>
+                  </div>
+                </div>
+
+                <InfoRow
+                  icon={ShieldCheck}
+                  label="Transfer"
+                  value="WebRTC DataChannel"
+                />
+                <InfoRow icon={Lock} label="Storage" value="No server storage" />
+                <InfoRow icon={Wifi} label="Signaling" value="Socket.IO" />
+                <InfoRow icon={Clock} label="Created at" value={createdAtText} />
+                <InfoRow icon={Clock} label="Ends at" value={endsAtText} />
+                <InfoRow icon={Clock} label="Room lifetime" value="30 minutes" />
+              </section>
+
+              <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+                <div className="mb-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 dark:text-white">
+                      Connection
+                    </p>
+
+                    <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                      WebRTC transport state
+                    </p>
                   </div>
 
-                  <div
-                    className={`flex h-8 w-8 items-center justify-center rounded-xl ${
+                  <span
+                    className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${
                       connected
                         ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800/80 dark:text-slate-400'
+                        : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
                     }`}
                   >
-                    {connected ? <Wifi size={16} /> : <Activity size={16} />}
-                  </div>
+                    {connected ? 'Connected' : 'Disconnected'}
+                  </span>
                 </div>
-              </div>
 
-              <div className="p-4">
-                <PeerRadar
-                  role={role}
-                  peer={peer}
-                  peerVisible={peerVisible}
-                  peerReveal={peerReveal}
-                  connected={connected}
-                  flow={radarFlow}
-                  connectionState={webrtc.connectionState}
-                  deviceName={deviceName}
-                  deviceInfo={deviceInfo}
-                  YouIcon={YouIcon}
-                  PeerIcon={PeerIcon}
-                  onKickPeer={handleKickPeer}
+                <InfoRow
+                  icon={Power}
+                  label="Peer state"
+                  value={webrtc.connectionState || 'new'}
                 />
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
-              <div className="mb-2 flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
-                  <ShieldCheck size={17} />
-                </div>
-
-                <div>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">
-                    Direct Encrypted Channel
-                  </p>
-
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Browser-to-browser connection
-                  </p>
-                </div>
-              </div>
-
-              <InfoRow
-                icon={ShieldCheck}
-                label="Transfer"
-                value="WebRTC DataChannel"
-              />
-              <InfoRow icon={Lock} label="Storage" value="No server storage" />
-              <InfoRow icon={Wifi} label="Signaling" value="Socket.IO" />
-              <InfoRow icon={Clock} label="Created at" value={createdAtText} />
-              <InfoRow icon={Clock} label="Ends at" value={endsAtText} />
-              <InfoRow icon={Clock} label="Room lifetime" value="30 minutes" />
-            </section>
-
-            <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">
-                    Connection
-                  </p>
-
-                  <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                    WebRTC transport state
-                  </p>
-                </div>
-
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${
-                    connected
-                      ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-                      : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
-                  }`}
-                >
-                  {connected ? 'Connected' : 'Disconnected'}
-                </span>
-              </div>
-
-              <InfoRow
-                icon={Power}
-                label="Peer state"
-                value={webrtc.connectionState || 'new'}
-              />
-              <InfoRow
-                icon={Wifi}
-                label="Data channel"
-                value={webrtc.dataChannelOpen ? 'Open' : 'Closed'}
-              />
-              <InfoRow icon={Users} label="Devices" value={`${peerCount}/2`} />
-              <InfoRow
-                icon={Gauge}
-                label="Link quality"
-                value={connectionQuality.label}
-              />
-            </section>
-          </aside>
-
+                <InfoRow
+                  icon={Wifi}
+                  label="Data channel"
+                  value={webrtc.dataChannelOpen ? 'Open' : 'Closed'}
+                />
+                <InfoRow icon={Users} label="Devices" value={`${peerCount}/2`} />
+                <InfoRow
+                  icon={Gauge}
+                  label="Link quality"
+                  value={connectionQuality.label}
+                />
+              </section>
+            </aside>
+          }
+        >
+          {/* ============================================================
+              MAIN CONTENT
+          ============================================================ */}
           <section className="min-w-0 space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard
@@ -3375,7 +3597,7 @@ export default function RoomPage() {
               </div>
             </div>
           </section>
-        </div>
+        </ResizableSidebarLayout>
       </main>
 
       {/* Share window: WhatsApp, Facebook, Telegram, X, LinkedIn, Email, SMS, Copy */}
