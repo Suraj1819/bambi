@@ -62,7 +62,6 @@ import {
   SlidersHorizontal,
   List,
   Grid2X2,
-  MoreHorizontal,
   Eye,
   Folder,
   Timer,
@@ -1123,8 +1122,8 @@ function EnhancedFileRow({
           )}
         </div>
 
-        <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-          <button type="button" onClick={() => onDetails?.(file)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-violet-600 dark:hover:bg-slate-800 dark:hover:text-violet-400" title="File details">
+        <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
+          <button type="button" onClick={() => onDetails?.(file)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/10 dark:hover:text-violet-400" title="View file details" aria-label="View file details">
             <Eye size={14} />
           </button>
           <button type="button" onClick={() => onCopyName?.(file?.name)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-violet-600 dark:hover:bg-slate-800 dark:hover:text-violet-400" title="Copy filename">
@@ -1142,7 +1141,6 @@ function EnhancedFileRow({
           {!isActive && !isPending && <button type="button" onClick={() => onRemove?.(fileId, direction)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10" title="Remove"><Trash2 size={13} /></button>}
         </div>
 
-        {!compact && <button type="button" onClick={() => onDetails?.(file)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 sm:hidden" title="More actions"><MoreHorizontal size={16} /></button>}
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2 sm:hidden">
@@ -1155,6 +1153,70 @@ function EnhancedFileRow({
         {isActive && <button type="button" onClick={() => onCancel?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 text-[10px] font-bold text-red-500 dark:border-red-900/50"><X size={13} />Cancel</button>}
         {isCompleted && isIncoming && <button type="button" onClick={() => onDownload?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-[10px] font-bold dark:border-slate-700"><Download size={13} />Download</button>}
         {isFailed && <button type="button" onClick={() => onRetry?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-[10px] font-bold dark:border-slate-700"><RotateCcw size={13} />Retry</button>}
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Desktop file details modal                                                */
+/* -------------------------------------------------------------------------- */
+
+function FileDetailsModal({ file, onClose }) {
+  if (!file) return null;
+
+  const isIncoming = file.direction === 'incoming';
+  const status = file.status || 'pending';
+  const transferred = isIncoming
+    ? Number(file.bytesReceived || file.receivedBytes || 0)
+    : Number(file.bytesSent || file.sentBytes || 0);
+  const progress = file.size > 0
+    ? Math.min(100, Math.max(0, Number(file.progress || 0), (transferred / file.size) * 100))
+    : 0;
+
+  return (
+    <div className="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-950/45 p-6 backdrop-blur-sm xl:flex" role="dialog" aria-modal="true" aria-label="File details">
+      <button type="button" className="absolute inset-0 cursor-default" aria-label="Close file details" onClick={onClose} />
+      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#101217]">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5 dark:border-slate-800">
+          <div className="min-w-0">
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-500">File details</p>
+            <h3 className="mt-1 truncate text-base font-extrabold text-slate-900 dark:text-white" title={file.name}>{file.name || 'Unnamed file'}</h3>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatBytes(file.size || 0)} · {isIncoming ? 'Received' : 'Sent'}</p>
+          </div>
+          <button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white" aria-label="Close">
+            <X size={17} />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 p-6">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
+            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Status</p>
+            <p className="mt-1 text-sm font-bold capitalize text-slate-800 dark:text-slate-100">{status}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
+            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Progress</p>
+            <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{Math.round(progress)}%</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
+            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Transferred</p>
+            <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{formatBytes(transferred)}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
+            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Type</p>
+            <p className="mt-1 truncate text-sm font-bold text-slate-800 dark:text-slate-100">{getFileTypeMeta(file).label}</p>
+          </div>
+          {file.relativePath && file.relativePath !== file.name && (
+            <div className="col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
+              <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Path</p>
+              <p className="mt-1 break-all text-xs font-semibold text-slate-700 dark:text-slate-200">{file.relativePath}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end border-t border-slate-100 px-6 py-4 dark:border-slate-800">
+          <button type="button" onClick={onClose} className="h-9 rounded-xl bg-violet-600 px-4 text-xs font-bold text-white transition hover:bg-violet-700">Close</button>
+        </div>
       </div>
     </div>
   );
@@ -1410,6 +1472,18 @@ export default function RoomPage() {
    */
   const sidebar = useResizableSidebar();
 
+  const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1280px)').matches : false,
+  );
+
+  useEffect(() => {
+    const media = window.matchMedia('(min-width: 1280px)');
+    const handleChange = () => setIsDesktopLayout(media.matches);
+    handleChange();
+    media.addEventListener?.('change', handleChange);
+    return () => media.removeEventListener?.('change', handleChange);
+  }, []);
+
   const [joining, setJoining] = useState(true);
   const [roomError, setRoomError] = useState('');
   const [roomExpired, setRoomExpired] = useState(false);
@@ -1425,8 +1499,8 @@ export default function RoomPage() {
   const [fileSort, setFileSort] = useState('newest');
   const [fileView, setFileView] = useState('list');
   const [selectedFiles, setSelectedFiles] = useState(new Set());
-  const [detailsFile, setDetailsFile] = useState(null);
   const [showConnectionDetails, setShowConnectionDetails] = useState(false);
+  const [fileDetails, setFileDetails] = useState(null);
   const [activity, setActivity] = useState([]);
 
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
@@ -2348,15 +2422,14 @@ export default function RoomPage() {
     transferRef.current?.removeFile?.(fileId, dir);
   }, []);
 
-  const allRoomFiles = useMemo(
-    () => [
-      ...incoming.map((file) => ({ ...file, __direction: 'incoming' })),
-      ...outgoing.map((file) => ({ ...file, __direction: 'outgoing' })),
-    ],
-    [incoming, outgoing],
-  );
+  // The transfer hook may mutate its file arrays in place. Keep this list
+  // derived on every render so newly sent/received files always appear.
+  const allRoomFiles = [
+    ...incoming.map((file) => ({ ...file, __direction: 'incoming' })),
+    ...outgoing.map((file) => ({ ...file, __direction: 'outgoing' })),
+  ];
 
-  const filteredRoomFiles = useMemo(() => {
+  const filteredRoomFiles = (() => {
     const query = fileSearch.trim().toLowerCase();
 
     const result = allRoomFiles.filter((file) => {
@@ -2399,16 +2472,14 @@ export default function RoomPage() {
       if (fileSort === 'status') return String(a.status || '').localeCompare(String(b.status || ''));
       return Number(b.createdAt || b.startedAt || b.timestamp || 0) - Number(a.createdAt || a.startedAt || a.timestamp || 0);
     });
-  }, [allRoomFiles, fileFilter, fileSearch, fileSort]);
+  })();
 
-  const filteredIncomingFiles = useMemo(
-    () => filteredRoomFiles.filter((file) => file.__direction === 'incoming'),
-    [filteredRoomFiles],
+  const filteredIncomingFiles = filteredRoomFiles.filter(
+    (file) => file.__direction === 'incoming',
   );
 
-  const filteredOutgoingFiles = useMemo(
-    () => filteredRoomFiles.filter((file) => file.__direction === 'outgoing'),
-    [filteredRoomFiles],
+  const filteredOutgoingFiles = filteredRoomFiles.filter(
+    (file) => file.__direction === 'outgoing',
   );
 
   const selectedRoomFiles = useMemo(
@@ -2879,7 +2950,7 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FBFAFF] text-slate-900 dark:bg-[#0a0b0e] dark:text-white">
+    <div id="room-page" className="min-h-screen w-full min-w-0 overflow-x-hidden bg-[#FBFAFF] text-slate-900 dark:bg-[#0a0b0e] dark:text-white">
       <header className="relative z-20 border-b border-slate-200/80 bg-[#FBFAFF] dark:border-slate-800/80 dark:bg-[#0a0b0e]">
         <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -2960,6 +3031,25 @@ export default function RoomPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               {/* Sidebar toggle: visible on all screen sizes */}
+              <button
+                type="button"
+                onClick={sidebar.toggleCollapsed}
+                aria-expanded={!sidebar.sidebarCollapsed}
+                aria-controls="app-sidebar"
+                title={
+                  sidebar.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
+                }
+                className="hidden xl:inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#0f1115] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
+              >
+                {sidebar.sidebarCollapsed ? (
+                  <PanelLeftOpen size={14} />
+                ) : (
+                  <PanelLeftClose size={14} />
+                )}
+                <span>
+                  {sidebar.sidebarCollapsed ? 'Show panel' : 'Hide panel'}
+                </span>
+              </button>
 
               <button
                 type="button"
@@ -3175,11 +3265,12 @@ export default function RoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full min-w-0 max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
         <ResizableSidebarLayout
           controller={sidebar}
           sidebar={
-            <aside className="min-h-0 space-y-5">
+            isDesktopLayout ? (
+            <aside className="min-h-0 min-w-0 space-y-5">
               <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
                   <div className="flex items-center justify-between">
@@ -3293,6 +3384,7 @@ export default function RoomPage() {
                 />
               </section>
             </aside>
+            ) : null
           }
         >
           {/* ============================================================
@@ -3697,7 +3789,7 @@ export default function RoomPage() {
                           onCancel={(id) => handleCancel(id, 'incoming')}
                           onRemove={handleRemove}
                           onCopyName={handleCopyName}
-                          onDetails={setDetailsFile}
+                          onDetails={setFileDetails}
                           compact={fileView === 'grid'}
                         />
                       ))}
@@ -3796,7 +3888,7 @@ export default function RoomPage() {
                           onCancel={(id) => handleCancel(id, 'outgoing')}
                           onRemove={handleRemove}
                           onCopyName={handleCopyName}
-                          onDetails={setDetailsFile}
+                          onDetails={setFileDetails}
                           compact={fileView === 'grid'}
                         />
                       ))}
@@ -4192,39 +4284,8 @@ export default function RoomPage() {
         </ResizableSidebarLayout>
       </main>
 
-      {detailsFile && (
-        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm" onMouseDown={() => setDetailsFile(null)}>
-          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-[#0f1115]" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-slate-100 p-5 dark:border-slate-800">
-              <div className="flex min-w-0 items-center gap-3">
-                <FileTypeIcon file={detailsFile} />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-extrabold text-slate-900 dark:text-white">{detailsFile.name || 'Unnamed file'}</p>
-                  <p className="mt-0.5 text-[10px] text-slate-500">{formatBytes(detailsFile.size || 0)} · {getFileTypeMeta(detailsFile).label}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => setDetailsFile(null)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={16} /></button>
-            </div>
-            <div className="p-5">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <InfoRow icon={HardDrive} label="Size" value={formatBytes(detailsFile.size || 0)} />
-                <InfoRow icon={Activity} label="Status" value={detailsFile.status || 'pending'} />
-                <InfoRow icon={ArrowDownToLine} label="Received" value={formatBytes(detailsFile.bytesReceived || detailsFile.receivedBytes || 0)} />
-                <InfoRow icon={ArrowUpFromLine} label="Sent" value={formatBytes(detailsFile.bytesSent || detailsFile.sentBytes || 0)} />
-                <InfoRow icon={Zap} label="Speed" value={formatSpeed(detailsFile.speed || detailsFile.bytesPerSecond || 0)} />
-                <InfoRow icon={Timer} label="ETA" value={detailsFile.eta || detailsFile.remainingTime ? formatETA(detailsFile.eta || detailsFile.remainingTime) : '—'} />
-              </div>
-              <div className="mt-4 rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
-                <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Path</p>
-                <p className="mt-1 break-all text-xs font-medium text-slate-700 dark:text-slate-300">{detailsFile.relativePath || detailsFile.webkitRelativePath || detailsFile.name || '—'}</p>
-              </div>
-              <div className="mt-4 flex gap-2">
-                <button type="button" onClick={() => { handleCopyName(detailsFile.name); }} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><Copy size={14} />Copy filename</button>
-                {['completed', 'success', 'done'].includes(detailsFile.status) && detailsFile.__direction === 'incoming' && <button type="button" onClick={() => { handleDownload(detailsFile.fileId || detailsFile.id); setDetailsFile(null); }} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 text-xs font-bold text-white"><Download size={14} />Download</button>}
-              </div>
-            </div>
-          </div>
-        </div>
+      {isDesktopLayout && (
+        <FileDetailsModal file={fileDetails} onClose={() => setFileDetails(null)} />
       )}
 
       {/* Share window: WhatsApp, Facebook, Telegram, X, LinkedIn, Email, SMS, Copy */}
