@@ -58,6 +58,24 @@ import {
   Link as LinkIcon,
   PanelLeftClose,
   PanelLeftOpen,
+  Search,
+  SlidersHorizontal,
+  List,
+  Grid2X2,
+  MoreHorizontal,
+  Eye,
+  Folder,
+  Timer,
+  BarChart3,
+  CheckSquare,
+  Square,
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CircleDot,
+  CircleCheck,
+  CircleX,
+  ChevronDown,
+  ClipboardList,
 } from 'lucide-react';
 
 import {
@@ -986,6 +1004,162 @@ function FileRow({
   );
 }
 
+function EnhancedFileRow({
+  file,
+  direction,
+  selected,
+  onToggleSelect,
+  onAccept,
+  onReject,
+  onDownload,
+  onRetry,
+  onCancel,
+  onRemove,
+  onCopyName,
+  onDetails,
+  compact = false,
+}) {
+  const isIncoming = direction === 'incoming';
+  const status = file?.status || 'pending';
+  const isPending = ['pending', 'waiting', 'offer'].includes(status);
+  const isActive = ['sending', 'receiving', 'transferring', 'active'].includes(status);
+  const isCompleted = ['completed', 'success', 'done'].includes(status);
+  const isFailed = ['failed', 'error'].includes(status);
+  const isCancelled = ['cancelled', 'canceled', 'rejected'].includes(status);
+  const transferred = isIncoming
+    ? Number(file?.bytesReceived || file?.receivedBytes || 0)
+    : Number(file?.bytesSent || file?.sentBytes || 0);
+  const calculatedProgress = file?.size > 0 ? (transferred / file.size) * 100 : 0;
+  const progress = Math.min(100, Math.max(0, isCompleted ? 100 : Math.max(Number(file?.progress || 0), calculatedProgress)));
+  const speed = Number(file?.speed || file?.bytesPerSecond || 0);
+  const eta = Number(file?.eta || file?.remainingTime || 0);
+  const fileId = file?.fileId || file?.id;
+  const meta = getFileTypeMeta(file);
+  const Icon = meta.Icon;
+
+  const statusLabel = isActive
+    ? isIncoming ? 'Receiving' : 'Sending'
+    : isPending
+      ? isIncoming ? 'Waiting for approval' : 'Queued'
+      : isCompleted
+        ? 'Completed'
+        : isFailed
+          ? 'Transfer failed'
+          : isCancelled
+            ? 'Cancelled'
+            : status;
+
+  const statusClass = isActive
+    ? 'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400'
+    : isPending
+      ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+      : isCompleted
+        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+        : isFailed || isCancelled
+          ? 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400'
+          : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
+
+  return (
+    <div className={`group rounded-2xl border bg-white p-3 shadow-sm transition dark:bg-[#0f1115] ${selected ? 'border-violet-400 ring-2 ring-violet-500/10 dark:border-violet-500' : 'border-slate-200 hover:border-violet-200 dark:border-slate-800 dark:hover:border-violet-500/30'}`}>
+      <div className="flex min-w-0 items-start gap-3">
+        <button
+          type="button"
+          onClick={() => onToggleSelect?.(fileId)}
+          className="mt-2 shrink-0 text-slate-300 transition hover:text-violet-600 dark:text-slate-700 dark:hover:text-violet-400"
+          aria-label={selected ? 'Deselect file' : 'Select file'}
+        >
+          {selected ? <CheckSquare size={17} className="text-violet-600 dark:text-violet-400" /> : <Square size={17} />}
+        </button>
+
+        <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${meta.wrapper}`}>
+          <Icon size={19} />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 break-words text-xs font-bold leading-5 text-slate-900 dark:text-white sm:truncate" title={file?.name}>
+              {file?.name || 'Unnamed file'}
+            </p>
+            <span className="shrink-0 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+              {formatBytes(file?.size || 0)}
+            </span>
+          </div>
+
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold ${statusClass}`}>
+              {statusLabel}
+            </span>
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+              {meta.label}
+            </span>
+            {file?.relativePath && file.relativePath !== file.name && (
+              <span className="max-w-[220px] truncate text-[9px] text-slate-400 dark:text-slate-500" title={file.relativePath}>
+                {file.relativePath}
+              </span>
+            )}
+          </div>
+
+          {isActive && (
+            <>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                  <div className={`h-full rounded-full transition-[width] duration-200 ${isIncoming ? 'bg-blue-500' : 'bg-violet-600'}`} style={{ width: `${progress}%` }} />
+                </div>
+                <span className="w-10 shrink-0 text-right text-[9px] font-bold text-slate-500 dark:text-slate-400">
+                  {Math.round(progress)}%
+                </span>
+              </div>
+              <div className="mt-1 flex items-center justify-between gap-2 text-[9px] text-slate-400 dark:text-slate-500">
+                <span>{formatBytes(transferred)} / {formatBytes(file?.size || 0)}</span>
+                <span>{speed > 0 ? formatSpeed(speed) : '—'} {eta > 0 ? `· ${formatETA(eta)}` : ''}</span>
+              </div>
+            </>
+          )}
+
+          {isCompleted && (
+            <div className="mt-1 text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+              {isIncoming ? 'Ready to download' : 'Delivered to peer'}
+            </div>
+          )}
+        </div>
+
+        <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+          <button type="button" onClick={() => onDetails?.(file)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-violet-600 dark:hover:bg-slate-800 dark:hover:text-violet-400" title="File details">
+            <Eye size={14} />
+          </button>
+          <button type="button" onClick={() => onCopyName?.(file?.name)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-violet-600 dark:hover:bg-slate-800 dark:hover:text-violet-400" title="Copy filename">
+            <CopyIcon size={14} />
+          </button>
+          {isPending && isIncoming && (
+            <>
+              <button type="button" onClick={() => onReject?.(fileId)} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[10px] font-bold text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"><X size={12} />Reject</button>
+              <button type="button" onClick={() => onAccept?.(fileId)} className="flex h-8 items-center gap-1 rounded-lg bg-violet-600 px-2.5 text-[10px] font-bold text-white transition hover:bg-violet-700"><CheckCircle size={12} />Accept</button>
+            </>
+          )}
+          {isActive && <button type="button" onClick={() => onCancel?.(fileId)} className="flex h-8 items-center gap-1 rounded-lg border border-red-200 px-2.5 text-[10px] font-bold text-red-500 transition hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-500/10"><X size={12} />Cancel</button>}
+          {isCompleted && isIncoming && <button type="button" onClick={() => onDownload?.(fileId)} className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-200"><Download size={13} />Download</button>}
+          {isFailed && <button type="button" onClick={() => onRetry?.(fileId)} className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[10px] font-bold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300"><RotateCcw size={12} />Retry</button>}
+          {!isActive && !isPending && <button type="button" onClick={() => onRemove?.(fileId, direction)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-500/10" title="Remove"><Trash2 size={13} /></button>}
+        </div>
+
+        {!compact && <button type="button" onClick={() => onDetails?.(file)} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 sm:hidden" title="More actions"><MoreHorizontal size={16} /></button>}
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2 sm:hidden">
+        {isPending && isIncoming && (
+          <>
+            <button type="button" onClick={() => onAccept?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-[10px] font-bold text-white"><CheckCircle size={13} />Accept</button>
+            <button type="button" onClick={() => onReject?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-[10px] font-bold dark:border-slate-700"><X size={13} />Reject</button>
+          </>
+        )}
+        {isActive && <button type="button" onClick={() => onCancel?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 text-[10px] font-bold text-red-500 dark:border-red-900/50"><X size={13} />Cancel</button>}
+        {isCompleted && isIncoming && <button type="button" onClick={() => onDownload?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-[10px] font-bold dark:border-slate-700"><Download size={13} />Download</button>}
+        {isFailed && <button type="button" onClick={() => onRetry?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-[10px] font-bold dark:border-slate-700"><RotateCcw size={13} />Retry</button>}
+      </div>
+    </div>
+  );
+}
+
 /* -------------------------------------------------------------------------- */
 /* Confirmation modal                                                         */
 /* -------------------------------------------------------------------------- */
@@ -1246,6 +1420,14 @@ export default function RoomPage() {
   const [showShare, setShowShare] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const [fileSearch, setFileSearch] = useState('');
+  const [fileFilter, setFileFilter] = useState('all');
+  const [fileSort, setFileSort] = useState('newest');
+  const [fileView, setFileView] = useState('list');
+  const [selectedFiles, setSelectedFiles] = useState(new Set());
+  const [detailsFile, setDetailsFile] = useState(null);
+  const [showConnectionDetails, setShowConnectionDetails] = useState(false);
+  const [activity, setActivity] = useState([]);
 
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
@@ -1285,6 +1467,14 @@ export default function RoomPage() {
 
   /* Track incoming file IDs we've already toasted for. */
   const notifiedIncomingRef = useRef(new Set());
+  const activitySnapshotRef = useRef(new Map());
+
+  const pushActivity = useCallback((message, tone = 'violet') => {
+    setActivity((items) => [
+      { id: `${Date.now()}-${Math.random()}`, message, tone, time: Date.now() },
+      ...items,
+    ].slice(0, 30));
+  }, []);
 
   /* ---------------------------------------------------------------------- */
   /* Join                                                                    */
@@ -2062,6 +2252,46 @@ export default function RoomPage() {
     }
   }, [incoming]);
 
+  useEffect(() => {
+    const allFiles = [
+      ...incoming.map((file) => ({ ...file, __direction: 'incoming' })),
+      ...outgoing.map((file) => ({ ...file, __direction: 'outgoing' })),
+    ];
+
+    allFiles.forEach((file) => {
+      const id = file.fileId || file.id;
+      if (!id) return;
+
+      const status = file.status || 'pending';
+      const previous = activitySnapshotRef.current.get(id);
+
+      if (!previous) {
+        activitySnapshotRef.current.set(id, status);
+        pushActivity(
+          `${file.__direction === 'incoming' ? 'Incoming' : 'Outgoing'} file added: ${file.name || 'Unnamed file'}`,
+          file.__direction === 'incoming' ? 'blue' : 'violet',
+        );
+        return;
+      }
+
+      if (previous === status) return;
+      activitySnapshotRef.current.set(id, status);
+
+      if (['completed', 'success', 'done'].includes(status)) {
+        pushActivity(`${file.name || 'File'} completed`, 'emerald');
+      } else if (['failed', 'error'].includes(status)) {
+        pushActivity(`${file.name || 'File'} failed`, 'red');
+      } else if (['cancelled', 'canceled', 'rejected'].includes(status)) {
+        pushActivity(`${file.name || 'File'} cancelled`, 'red');
+      } else if (['sending', 'receiving', 'transferring', 'active'].includes(status)) {
+        pushActivity(
+          `${file.__direction === 'incoming' ? 'Receiving' : 'Sending'} ${file.name || 'file'}`,
+          'violet',
+        );
+      }
+    });
+  }, [incoming, outgoing, pushActivity]);
+
   const totalIncomingReceived = incoming.reduce(
     (sum, file) =>
       sum + Number(file.bytesReceived || file.receivedBytes || 0),
@@ -2117,6 +2347,169 @@ export default function RoomPage() {
     const dir = direction === 'incoming' || direction === 'in' ? 'in' : 'out';
     transferRef.current?.removeFile?.(fileId, dir);
   }, []);
+
+  const allRoomFiles = useMemo(
+    () => [
+      ...incoming.map((file) => ({ ...file, __direction: 'incoming' })),
+      ...outgoing.map((file) => ({ ...file, __direction: 'outgoing' })),
+    ],
+    [incoming, outgoing],
+  );
+
+  const filteredRoomFiles = useMemo(() => {
+    const query = fileSearch.trim().toLowerCase();
+
+    const result = allRoomFiles.filter((file) => {
+      const status = file.status || 'pending';
+      const active = ['sending', 'receiving', 'transferring', 'active'].includes(status);
+      const completed = ['completed', 'success', 'done'].includes(status);
+      const waiting = ['pending', 'waiting', 'offer'].includes(status);
+      const failed = ['failed', 'error'].includes(status);
+      const cancelled = ['cancelled', 'canceled', 'rejected'].includes(status);
+
+      if (fileFilter === 'active' && !active) return false;
+      if (fileFilter === 'completed' && !completed) return false;
+      if (fileFilter === 'waiting' && !waiting) return false;
+      if (fileFilter === 'failed' && !failed) return false;
+      if (fileFilter === 'cancelled' && !cancelled) return false;
+      if (fileFilter === 'incoming' && file.__direction !== 'incoming') return false;
+      if (fileFilter === 'outgoing' && file.__direction !== 'outgoing') return false;
+
+      if (!query) return true;
+
+      const haystack = [
+        file.name,
+        file.relativePath,
+        file.webkitRelativePath,
+        file.type,
+        file.mimeType,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+
+    return [...result].sort((a, b) => {
+      if (fileSort === 'name-asc') return String(a.name || '').localeCompare(String(b.name || ''));
+      if (fileSort === 'name-desc') return String(b.name || '').localeCompare(String(a.name || ''));
+      if (fileSort === 'largest') return Number(b.size || 0) - Number(a.size || 0);
+      if (fileSort === 'smallest') return Number(a.size || 0) - Number(b.size || 0);
+      if (fileSort === 'status') return String(a.status || '').localeCompare(String(b.status || ''));
+      return Number(b.createdAt || b.startedAt || b.timestamp || 0) - Number(a.createdAt || a.startedAt || a.timestamp || 0);
+    });
+  }, [allRoomFiles, fileFilter, fileSearch, fileSort]);
+
+  const filteredIncomingFiles = useMemo(
+    () => filteredRoomFiles.filter((file) => file.__direction === 'incoming'),
+    [filteredRoomFiles],
+  );
+
+  const filteredOutgoingFiles = useMemo(
+    () => filteredRoomFiles.filter((file) => file.__direction === 'outgoing'),
+    [filteredRoomFiles],
+  );
+
+  const selectedRoomFiles = useMemo(
+    () => allRoomFiles.filter((file) => selectedFiles.has(file.fileId || file.id)),
+    [allRoomFiles, selectedFiles],
+  );
+
+  const selectedIncomingCompleted = selectedRoomFiles.filter(
+    (file) => file.__direction === 'incoming' && ['completed', 'success', 'done'].includes(file.status),
+  );
+
+  const selectedFailed = selectedRoomFiles.filter(
+    (file) => ['failed', 'error'].includes(file.status),
+  );
+
+  const toggleFileSelection = useCallback((fileId) => {
+    if (!fileId) return;
+    setSelectedFiles((current) => {
+      const next = new Set(current);
+      if (next.has(fileId)) next.delete(fileId);
+      else next.add(fileId);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedFiles(new Set()), []);
+
+  const toggleSelectAllVisible = useCallback(() => {
+    setSelectedFiles((current) => {
+      const next = new Set(current);
+      const visibleIds = filteredRoomFiles.map((file) => file.fileId || file.id).filter(Boolean);
+      const everySelected = visibleIds.length > 0 && visibleIds.every((id) => next.has(id));
+
+      visibleIds.forEach((id) => {
+        if (everySelected) next.delete(id);
+        else next.add(id);
+      });
+
+      return next;
+    });
+  }, [filteredRoomFiles]);
+
+  const handleBulkDownload = useCallback(() => {
+    if (!selectedIncomingCompleted.length) {
+      toast.error('Select completed incoming files first.');
+      return;
+    }
+    selectedIncomingCompleted.forEach((file) => {
+      transferRef.current?.downloadFile?.(file.fileId || file.id);
+    });
+    toast.success(`Downloading ${selectedIncomingCompleted.length} selected file(s)...`);
+    clearSelection();
+  }, [selectedIncomingCompleted, clearSelection]);
+
+  const handleBulkRetry = useCallback(() => {
+    if (!selectedFailed.length) {
+      toast.error('Select failed files first.');
+      return;
+    }
+    selectedFailed.forEach((file) => {
+      transferRef.current?.retryFile?.(file.fileId || file.id);
+    });
+    toast.success(`Retrying ${selectedFailed.length} selected file(s)...`);
+    clearSelection();
+  }, [selectedFailed, clearSelection]);
+
+  const handleBulkCancel = useCallback(() => {
+    const activeSelected = selectedRoomFiles.filter((file) =>
+      ['sending', 'receiving', 'transferring', 'active'].includes(file.status),
+    );
+
+    activeSelected.forEach((file) => {
+      handleCancel(file.fileId || file.id, file.__direction);
+    });
+
+    if (activeSelected.length) {
+      toast.success(`Cancelled ${activeSelected.length} transfer(s).`);
+    }
+    clearSelection();
+  }, [selectedRoomFiles, clearSelection]);
+
+  const handleBulkRemove = useCallback(() => {
+    if (!selectedRoomFiles.length) return;
+    selectedRoomFiles.forEach((file) => {
+      handleRemove(file.fileId || file.id, file.__direction);
+    });
+    toast.success(`Removed ${selectedRoomFiles.length} file(s) from the room list.`);
+    clearSelection();
+  }, [selectedRoomFiles, clearSelection]);
+
+  const handleAcceptAll = useCallback(() => {
+    if (!pendingIncoming.length) return;
+    pendingIncoming.forEach((file) => handleAccept(file.fileId || file.id));
+    toast.success(`Accepted ${pendingIncoming.length} incoming file(s).`);
+  }, [pendingIncoming, handleAccept]);
+
+  const handleRejectAll = useCallback(() => {
+    if (!pendingIncoming.length) return;
+    pendingIncoming.forEach((file) => handleReject(file.fileId || file.id));
+    toast.success(`Rejected ${pendingIncoming.length} incoming file(s).`);
+  }, [pendingIncoming, handleReject]);
 
   const handleClearCompletedIncoming = useCallback(() => {
     if (!completedIncoming.length) {
@@ -2566,26 +2959,7 @@ export default function RoomPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* Sidebar toggle: only meaningful on xl and up */}
-              <button
-                type="button"
-                onClick={sidebar.toggleCollapsed}
-                aria-expanded={!sidebar.sidebarCollapsed}
-                aria-controls="app-sidebar"
-                title={
-                  sidebar.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
-                }
-                className="hidden h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#0f1115] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400 xl:inline-flex"
-              >
-                {sidebar.sidebarCollapsed ? (
-                  <PanelLeftOpen size={14} />
-                ) : (
-                  <PanelLeftClose size={14} />
-                )}
-                <span>
-                  {sidebar.sidebarCollapsed ? 'Show panel' : 'Hide panel'}
-                </span>
-              </button>
+              {/* Sidebar toggle: visible on all screen sizes */}
 
               <button
                 type="button"
@@ -3059,231 +3433,376 @@ export default function RoomPage() {
               </div>
             </section>
 
-            <section className="rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
-              <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <HardDrive
-                      size={16}
-                      className="text-violet-600 dark:text-violet-400"
-                    />
+            <section className="space-y-4">
+              {/* FILE MANAGER HEADER */}
+              <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+                <div className="border-b border-slate-100 p-5 dark:border-slate-800 sm:p-6">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                          <HardDrive size={18} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-600 dark:text-violet-400">
+                            Transfer manager
+                          </p>
+                          <h2 className="mt-0.5 text-lg font-extrabold text-slate-900 dark:text-white">
+                            Files in this room
+                          </h2>
+                          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500 dark:text-slate-400">
+                            Received files and sent files are managed separately so you can quickly see what came from the peer and what you transferred.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
-                      Files in this room
-                    </h2>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[470px]">
+                      <div className="rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-slate-900/60">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Total files</p>
+                        <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{allRoomFiles.length}</p>
+                        <p className="mt-0.5 text-[9px] text-slate-400">{incoming.length} received · {outgoing.length} sent</p>
+                      </div>
+                      <div className="rounded-2xl bg-violet-50 px-3 py-2.5 dark:bg-violet-500/10">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-violet-500">Active</p>
+                        <p className="mt-1 text-sm font-extrabold text-violet-700 dark:text-violet-400">{activeIncoming.length + activeOutgoing.length}</p>
+                        <p className="mt-0.5 text-[9px] text-violet-500/80">Live transfers</p>
+                      </div>
+                      <div className="rounded-2xl bg-emerald-50 px-3 py-2.5 dark:bg-emerald-500/10">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-500">Received</p>
+                        <p className="mt-1 text-sm font-extrabold text-emerald-700 dark:text-emerald-400">{formatBytes(totalIncomingReceived)}</p>
+                        <p className="mt-0.5 text-[9px] text-emerald-600/70">From peer</p>
+                      </div>
+                      <div className="rounded-2xl bg-blue-50 px-3 py-2.5 dark:bg-blue-500/10">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-blue-500">Sent</p>
+                        <p className="mt-1 text-sm font-extrabold text-blue-700 dark:text-blue-400">{formatBytes(totalOutgoingSent)}</p>
+                        <p className="mt-0.5 text-[9px] text-blue-600/70">To peer</p>
+                      </div>
+                    </div>
                   </div>
 
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    Incoming and outgoing transfers for this session.
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500 dark:bg-slate-800/80 dark:text-slate-400">
-                    {incoming.length + outgoing.length} total
-                  </span>
-                </div>
-              </div>
-
-              {/* INCOMING */}
-              <div className="p-4 sm:p-5">
-                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Inbox
-                      size={14}
-                      className="text-violet-600 dark:text-violet-400"
-                    />
-
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                      Incoming
-                    </span>
-
-                    {pendingIncoming.length > 0 && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-extrabold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                        {pendingIncoming.length} waiting
-                      </span>
-                    )}
-
-                    {completedIncoming.length > 0 && (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-                        {completedIncoming.length} completed
-                      </span>
-                    )}
-
-                    {cancelledIncoming.length > 0 && (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-extrabold text-red-700 dark:bg-red-500/10 dark:text-red-400">
-                        {cancelledIncoming.length} cancelled
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {failedIncoming.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleRetryAllFailedIncoming}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 text-[10px] font-bold text-red-600 transition hover:bg-red-100 active:scale-95 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                      >
-                        <RotateCcw size={11} />
-                        Retry all ({failedIncoming.length})
-                      </button>
-                    )}
-
-                    {completedIncoming.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleDownloadAllCompleted}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-[10px] font-bold text-emerald-600 transition hover:bg-emerald-100 active:scale-95 dark:border-emerald-900/50 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20"
-                      >
-                        <DownloadCloud size={11} />
-                        Download all
-                      </button>
-                    )}
-
-                    {completedIncoming.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleClearCompletedIncoming}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600 active:scale-95 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:bg-violet-500/10 dark:hover:text-violet-400"
-                      >
-                        <CheckCircle size={11} />
-                        Clear completed
-                      </button>
-                    )}
-
-                    {(cancelledIncoming.length > 0 ||
-                      failedIncoming.length > 0) && (
-                      <button
-                        type="button"
-                        onClick={handleClearCancelledIncoming}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-[10px] font-bold text-red-500 transition hover:bg-red-50 active:scale-95 dark:border-red-900/50 dark:bg-[#15171d] dark:text-red-400 dark:hover:bg-red-500/10"
-                      >
-                        <Eraser size={11} />
-                        Clear cancelled
-                      </button>
-                    )}
-
-                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
-                      {incoming.length} files
-                    </span>
-                  </div>
-                </div>
-
-                {incoming.length === 0 ? (
-                  <EmptyQueue type="incoming" />
-                ) : (
-                  <div className="space-y-2">
-                    {incoming.map((file) => (
-                      <FileRow
-                        key={file.fileId || file.id}
-                        file={file}
-                        direction="incoming"
-                        onAccept={handleAccept}
-                        onReject={handleReject}
-                        onDownload={handleDownload}
-                        onRetry={handleRetry}
-                        onCancel={(id) => handleCancel(id, 'incoming')}
-                        onRemove={handleRemove}
-                        onCopyName={handleCopyName}
+                  <div className="mt-5 flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <div className="relative min-w-0 flex-1">
+                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        value={fileSearch}
+                        onChange={(event) => setFileSearch(event.target.value)}
+                        placeholder="Search received and sent files..."
+                        className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-9 text-xs font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:ring-4 focus:ring-violet-500/10 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-200"
                       />
+                      {fileSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setFileSearch('')}
+                          className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <select
+                        value={fileSort}
+                        onChange={(event) => setFileSort(event.target.value)}
+                        className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 outline-none dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                      >
+                        <option value="newest">Newest</option>
+                        <option value="name-asc">Name A-Z</option>
+                        <option value="name-desc">Name Z-A</option>
+                        <option value="largest">Largest</option>
+                        <option value="smallest">Smallest</option>
+                        <option value="status">Status</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => setFileView(fileView === 'list' ? 'grid' : 'list')}
+                        className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                      >
+                        {fileView === 'list' ? <Grid2X2 size={14} /> : <List size={14} />}
+                        <span className="hidden sm:inline">{fileView === 'list' ? 'Grid' : 'List'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowConnectionDetails((value) => !value)}
+                        className={`inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-bold transition ${showConnectionDetails ? 'border-violet-300 bg-violet-50 text-violet-600 dark:border-violet-500/40 dark:bg-violet-500/10 dark:text-violet-400' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300'}`}
+                      >
+                        <SlidersHorizontal size={14} />
+                        Details
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                    {[
+                      ['all', 'All', allRoomFiles.length],
+                      ['active', 'Active', activeIncoming.length + activeOutgoing.length],
+                      ['waiting', 'Waiting', pendingIncoming.length],
+                      ['completed', 'Completed', completedIncoming.length + completedOutgoing.length],
+                      ['failed', 'Failed', failedIncoming.length + failedOutgoing.length],
+                      ['cancelled', 'Cancelled', cancelledIncoming.length + cancelledOutgoing.length],
+                    ].map(([value, label, count]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFileFilter(value)}
+                        className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-extrabold transition ${fileFilter === value ? 'bg-violet-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-violet-50 hover:text-violet-600 dark:bg-slate-800/80 dark:text-slate-400 dark:hover:bg-violet-500/10 dark:hover:text-violet-400'}`}
+                      >
+                        {label}
+                        <span className={fileFilter === value ? 'text-white/70' : 'text-slate-400'}>{count}</span>
+                      </button>
                     ))}
+                  </div>
+
+                  {selectedFiles.size > 0 && (
+                    <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-violet-200 bg-violet-50/70 p-3 dark:border-violet-500/20 dark:bg-violet-500/10 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-2 text-xs font-bold text-violet-700 dark:text-violet-300">
+                        <CheckSquare size={15} />
+                        {selectedFiles.size} file{selectedFiles.size === 1 ? '' : 's'} selected
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedIncomingCompleted.length > 0 && (
+                          <button type="button" onClick={handleBulkDownload} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 text-[10px] font-bold text-white">
+                            <Download size={12} /> Download received
+                          </button>
+                        )}
+                        {selectedFailed.length > 0 && (
+                          <button type="button" onClick={handleBulkRetry} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300">
+                            <RotateCcw size={12} /> Retry
+                          </button>
+                        )}
+                        {selectedRoomFiles.some((file) => ['sending', 'receiving', 'transferring', 'active'].includes(file.status)) && (
+                          <button type="button" onClick={handleBulkCancel} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-[10px] font-bold text-red-500 dark:border-red-900/50 dark:bg-[#15171d]">
+                            <X size={12} /> Cancel
+                          </button>
+                        )}
+                        <button type="button" onClick={handleBulkRemove} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300">
+                          <Trash2 size={12} /> Remove
+                        </button>
+                        <button type="button" onClick={clearSelection} className="inline-flex h-8 items-center rounded-lg px-2.5 text-[10px] font-bold text-slate-500 hover:bg-white dark:hover:bg-slate-800">
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {showConnectionDetails && (
+                  <div className="border-t border-slate-100 bg-slate-50/70 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/40">
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <InfoRow icon={Wifi} label="Connection" value={connected ? 'Connected' : 'Disconnected'} />
+                      <InfoRow icon={Zap} label="Live speed" value={formatSpeed(totalActiveSpeed)} />
+                      <InfoRow icon={Gauge} label="Quality" value={connectionQuality.label} />
+                      <InfoRow icon={ShieldCheck} label="Transport" value="WebRTC DataChannel" />
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* OUTGOING */}
-              <div className="border-t border-slate-100 p-4 sm:p-5 dark:border-slate-800">
-                <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Send
-                      size={14}
-                      className="text-violet-600 dark:text-violet-400"
-                    />
+              {/* RECEIVED CATEGORY */}
+              <div className="overflow-hidden rounded-3xl border border-blue-200/70 bg-white shadow-sm dark:border-blue-500/20 dark:bg-[#0f1115]">
+                <div className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 via-white to-emerald-50/50 p-5 dark:border-blue-500/10 dark:from-blue-500/[0.08] dark:via-[#0f1115] dark:to-emerald-500/[0.04] sm:p-6">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                        <ArrowDownToLine size={20} />
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Received</h3>
+                          <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+                            {incoming.length} files
+                          </span>
+                          {activeIncoming.length > 0 && <span className="rounded-full bg-blue-100 px-2 py-1 text-[9px] font-extrabold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">{activeIncoming.length} receiving</span>}
+                          {pendingIncoming.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-extrabold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{pendingIncoming.length} waiting</span>}
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Files sent by the other device to you.</p>
+                      </div>
+                    </div>
 
-                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-                      Outgoing
-                    </span>
-
-                    {activeOutgoing.length > 0 && (
-                      <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-extrabold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
-                        {activeOutgoing.length} active
-                      </span>
-                    )}
-
-                    {completedOutgoing.length > 0 && (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-extrabold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
-                        {completedOutgoing.length} completed
-                      </span>
-                    )}
-
-                    {cancelledOutgoing.length > 0 && (
-                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-[9px] font-extrabold text-red-700 dark:bg-red-500/10 dark:text-red-400">
-                        {cancelledOutgoing.length} cancelled
-                      </span>
-                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {pendingIncoming.length > 0 && <button type="button" onClick={handleAcceptAll} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3 text-[10px] font-bold text-white shadow-sm hover:bg-blue-700"><CheckCircle size={13} /> Accept all</button>}
+                      {pendingIncoming.length > 0 && <button type="button" onClick={handleRejectAll} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><XCircle size={13} /> Reject all</button>}
+                      {completedIncoming.length > 0 && <button type="button" onClick={handleDownloadAllCompleted} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[10px] font-bold text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-500/10 dark:text-emerald-400"><DownloadCloud size={13} /> Download all</button>}
+                    </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    {failedOutgoing.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleRetryAllFailedOutgoing}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 text-[10px] font-bold text-red-600 transition hover:bg-red-100 active:scale-95 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20"
-                      >
-                        <RotateCcw size={11} />
-                        Retry all ({failedOutgoing.length})
-                      </button>
-                    )}
-
-                    {completedOutgoing.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleClearCompletedOutgoing}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-600 active:scale-95 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:bg-violet-500/10 dark:hover:text-violet-400"
-                      >
-                        <CheckCircle size={11} />
-                        Clear completed
-                      </button>
-                    )}
-
-                    {(cancelledOutgoing.length > 0 ||
-                      failedOutgoing.length > 0) && (
-                      <button
-                        type="button"
-                        onClick={handleClearCancelledOutgoing}
-                        className="inline-flex h-7 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-[10px] font-bold text-red-500 transition hover:bg-red-50 active:scale-95 dark:border-red-900/50 dark:bg-[#15171d] dark:text-red-400 dark:hover:bg-red-500/10"
-                      >
-                        <Eraser size={11} />
-                        Clear cancelled
-                      </button>
-                    )}
-
-                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
-                      {outgoing.length} files
-                    </span>
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Received</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalIncomingReceived)}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Data received</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Completed</p>
+                      <p className="mt-1 text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{completedIncoming.length}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Ready to download</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Waiting</p>
+                      <p className="mt-1 text-sm font-extrabold text-amber-600 dark:text-amber-400">{pendingIncoming.length}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Needs approval</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Failed</p>
+                      <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">{failedIncoming.length}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Transfer errors</p>
+                    </div>
                   </div>
                 </div>
 
-                {outgoing.length === 0 ? (
-                  <EmptyQueue
-                    type="outgoing"
-                    onShare={() => fileInputRef.current?.click()}
-                  />
-                ) : (
-                  <div className="space-y-2">
-                    {outgoing.map((file) => (
-                      <FileRow
-                        key={file.fileId || file.id}
-                        file={file}
-                        direction="outgoing"
-                        onRetry={handleRetry}
-                        onCancel={(id) => handleCancel(id, 'outgoing')}
-                        onRemove={handleRemove}
-                        onCopyName={handleCopyName}
-                      />
-                    ))}
+                <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => {
+                        const ids = filteredIncomingFiles.map((file) => file.fileId || file.id).filter(Boolean);
+                        setSelectedFiles((current) => {
+                          const next = new Set(current);
+                          const every = ids.length > 0 && ids.every((id) => next.has(id));
+                          ids.forEach((id) => every ? next.delete(id) : next.add(id));
+                          return next;
+                        });
+                      }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300">
+                        {filteredIncomingFiles.length > 0 && filteredIncomingFiles.every((file) => selectedFiles.has(file.fileId || file.id)) ? <CheckSquare size={12} /> : <Square size={12} />}
+                        Select received
+                      </button>
+                      <span className="text-[10px] font-semibold text-slate-400">Showing {filteredIncomingFiles.length} of {incoming.length}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {failedIncoming.length > 0 && <button type="button" onClick={handleRetryAllFailedIncoming} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 text-[10px] font-bold text-red-600 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400"><RotateCcw size={12} /> Retry failed</button>}
+                      {(failedIncoming.length + cancelledIncoming.length) > 0 && <button type="button" onClick={handleClearCancelledIncoming} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><Eraser size={12} /> Clear errors</button>}
+                      {completedIncoming.length > 0 && <button type="button" onClick={handleClearCompletedIncoming} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><CheckCircle size={12} /> Clear completed</button>}
+                    </div>
                   </div>
-                )}
+                </div>
+
+                <div className="p-4 sm:p-5">
+                  {filteredIncomingFiles.length === 0 ? (
+                    <EmptyQueue type="incoming" />
+                  ) : (
+                    <div className={fileView === 'grid' ? 'grid gap-3 md:grid-cols-2' : 'space-y-2.5'}>
+                      {filteredIncomingFiles.map((file) => (
+                        <EnhancedFileRow
+                          key={`received-${file.fileId || file.id}`}
+                          file={file}
+                          direction="incoming"
+                          selected={selectedFiles.has(file.fileId || file.id)}
+                          onToggleSelect={toggleFileSelection}
+                          onAccept={handleAccept}
+                          onReject={handleReject}
+                          onDownload={handleDownload}
+                          onRetry={handleRetry}
+                          onCancel={(id) => handleCancel(id, 'incoming')}
+                          onRemove={handleRemove}
+                          onCopyName={handleCopyName}
+                          onDetails={setDetailsFile}
+                          compact={fileView === 'grid'}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* SENT CATEGORY */}
+              <div className="overflow-hidden rounded-3xl border border-violet-200/70 bg-white shadow-sm dark:border-violet-500/20 dark:bg-[#0f1115]">
+                <div className="border-b border-violet-100 bg-gradient-to-r from-violet-50/80 via-white to-fuchsia-50/50 p-5 dark:border-violet-500/10 dark:from-violet-500/[0.08] dark:via-[#0f1115] dark:to-fuchsia-500/[0.04] sm:p-6">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                        <ArrowUpFromLine size={20} />
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Sent</h3>
+                          <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
+                            {outgoing.length} files
+                          </span>
+                          {activeOutgoing.length > 0 && <span className="rounded-full bg-violet-100 px-2 py-1 text-[9px] font-extrabold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">{activeOutgoing.length} sending</span>}
+                          {completedOutgoing.length > 0 && <span className="rounded-full bg-emerald-100 px-2 py-1 text-[9px] font-extrabold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">{completedOutgoing.length} delivered</span>}
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Files you have transferred to the other device.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {failedOutgoing.length > 0 && <button type="button" onClick={handleRetryAllFailedOutgoing} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-[10px] font-bold text-red-600 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400"><RotateCcw size={13} /> Retry failed</button>}
+                      {completedOutgoing.length > 0 && <button type="button" onClick={handleClearCompletedOutgoing} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><CheckCircle size={13} /> Clear completed</button>}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sent</p>
+                      <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalOutgoingSent)}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Data transferred</p>
+                    </div>
+                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Delivered</p>
+                      <p className="mt-1 text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{completedOutgoing.length}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Completed transfers</p>
+                    </div>
+                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sending</p>
+                      <p className="mt-1 text-sm font-extrabold text-violet-600 dark:text-violet-400">{activeOutgoing.length}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Live transfers</p>
+                    </div>
+                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Failed</p>
+                      <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">{failedOutgoing.length}</p>
+                      <p className="mt-0.5 text-[9px] text-slate-400">Transfer errors</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => {
+                        const ids = filteredOutgoingFiles.map((file) => file.fileId || file.id).filter(Boolean);
+                        setSelectedFiles((current) => {
+                          const next = new Set(current);
+                          const every = ids.length > 0 && ids.every((id) => next.has(id));
+                          ids.forEach((id) => every ? next.delete(id) : next.add(id));
+                          return next;
+                        });
+                      }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300">
+                        {filteredOutgoingFiles.length > 0 && filteredOutgoingFiles.every((file) => selectedFiles.has(file.fileId || file.id)) ? <CheckSquare size={12} /> : <Square size={12} />}
+                        Select sent
+                      </button>
+                      <span className="text-[10px] font-semibold text-slate-400">Showing {filteredOutgoingFiles.length} of {outgoing.length}</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(failedOutgoing.length + cancelledOutgoing.length) > 0 && <button type="button" onClick={handleClearCancelledOutgoing} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><Eraser size={12} /> Clear errors</button>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 sm:p-5">
+                  {filteredOutgoingFiles.length === 0 ? (
+                    <EmptyQueue type="outgoing" onShare={() => fileInputRef.current?.click()} />
+                  ) : (
+                    <div className={fileView === 'grid' ? 'grid gap-3 md:grid-cols-2' : 'space-y-2.5'}>
+                      {filteredOutgoingFiles.map((file) => (
+                        <EnhancedFileRow
+                          key={`sent-${file.fileId || file.id}`}
+                          file={file}
+                          direction="outgoing"
+                          selected={selectedFiles.has(file.fileId || file.id)}
+                          onToggleSelect={toggleFileSelection}
+                          onRetry={handleRetry}
+                          onCancel={(id) => handleCancel(id, 'outgoing')}
+                          onRemove={handleRemove}
+                          onCopyName={handleCopyName}
+                          onDetails={setDetailsFile}
+                          compact={fileView === 'grid'}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
 
@@ -3546,6 +4065,79 @@ export default function RoomPage() {
               </div>
             </section>
 
+            <section className="grid gap-5 lg:grid-cols-2">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-violet-600 dark:text-violet-400">Live transfer</p>
+                    <h3 className="mt-1 text-base font-bold text-slate-900 dark:text-white">Transfer dashboard</h3>
+                  </div>
+                  <BarChart3 size={18} className="text-slate-400" />
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Current speed</p>
+                      <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{formatSpeed(totalActiveSpeed)}</p>
+                    </div>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                      <Zap size={20} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                    <span>{activeIncoming.length + activeOutgoing.length} active transfer{activeIncoming.length + activeOutgoing.length === 1 ? '' : 's'}</span>
+                    <span>{connectionQuality.label}</span>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-white dark:bg-slate-800">
+                    <div className={`h-full rounded-full transition-all ${connected ? 'bg-violet-600' : 'bg-slate-300 dark:bg-slate-700'}`} style={{ width: `${Math.min(100, Math.max(connected ? 18 : 0, totalActiveSpeed ? Math.min(100, (totalActiveSpeed / (10 * 1024 * 1024)) * 100) : 0))}%` }} />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-slate-100 p-3 dark:border-slate-800">
+                    <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sent</p>
+                    <p className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{formatBytes(totalOutgoingSent)}</p>
+                    <p className="mt-1 text-[9px] text-slate-400">{outgoing.length} outgoing files</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-100 p-3 dark:border-slate-800">
+                    <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Received</p>
+                    <p className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{formatBytes(totalIncomingReceived)}</p>
+                    <p className="mt-1 text-[9px] text-slate-400">{incoming.length} incoming files</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-violet-600 dark:text-violet-400">Session history</p>
+                    <h3 className="mt-1 text-base font-bold text-slate-900 dark:text-white">Activity timeline</h3>
+                  </div>
+                  <ClipboardList size={18} className="text-slate-400" />
+                </div>
+
+                <div className="mt-4 max-h-[255px] space-y-2 overflow-auto pr-1">
+                  {activity.length === 0 ? (
+                    <div className="flex min-h-[170px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 text-center dark:border-slate-800">
+                      <Activity size={22} className="text-slate-300 dark:text-slate-600" />
+                      <p className="mt-2 text-xs font-semibold text-slate-500">No activity yet</p>
+                      <p className="mt-1 text-[10px] text-slate-400">Room events will appear here.</p>
+                    </div>
+                  ) : activity.map((item) => (
+                    <div key={item.id} className="flex items-start gap-3 rounded-xl border border-slate-100 p-2.5 dark:border-slate-800">
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.tone === 'emerald' ? 'bg-emerald-500' : item.tone === 'red' ? 'bg-red-500' : item.tone === 'blue' ? 'bg-blue-500' : 'bg-violet-500'}`} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-300">{item.message}</p>
+                        <p className="mt-0.5 text-[9px] text-slate-400">{new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
             <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-[#0f1115]">
               <div className="flex items-center gap-3">
                 <div
@@ -3599,6 +4191,41 @@ export default function RoomPage() {
           </section>
         </ResizableSidebarLayout>
       </main>
+
+      {detailsFile && (
+        <div className="fixed inset-0 z-[180] flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm" onMouseDown={() => setDetailsFile(null)}>
+          <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-800 dark:bg-[#0f1115]" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-100 p-5 dark:border-slate-800">
+              <div className="flex min-w-0 items-center gap-3">
+                <FileTypeIcon file={detailsFile} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-extrabold text-slate-900 dark:text-white">{detailsFile.name || 'Unnamed file'}</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">{formatBytes(detailsFile.size || 0)} · {getFileTypeMeta(detailsFile).label}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setDetailsFile(null)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><X size={16} /></button>
+            </div>
+            <div className="p-5">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <InfoRow icon={HardDrive} label="Size" value={formatBytes(detailsFile.size || 0)} />
+                <InfoRow icon={Activity} label="Status" value={detailsFile.status || 'pending'} />
+                <InfoRow icon={ArrowDownToLine} label="Received" value={formatBytes(detailsFile.bytesReceived || detailsFile.receivedBytes || 0)} />
+                <InfoRow icon={ArrowUpFromLine} label="Sent" value={formatBytes(detailsFile.bytesSent || detailsFile.sentBytes || 0)} />
+                <InfoRow icon={Zap} label="Speed" value={formatSpeed(detailsFile.speed || detailsFile.bytesPerSecond || 0)} />
+                <InfoRow icon={Timer} label="ETA" value={detailsFile.eta || detailsFile.remainingTime ? formatETA(detailsFile.eta || detailsFile.remainingTime) : '—'} />
+              </div>
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
+                <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Path</p>
+                <p className="mt-1 break-all text-xs font-medium text-slate-700 dark:text-slate-300">{detailsFile.relativePath || detailsFile.webkitRelativePath || detailsFile.name || '—'}</p>
+              </div>
+              <div className="mt-4 flex gap-2">
+                <button type="button" onClick={() => { handleCopyName(detailsFile.name); }} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><Copy size={14} />Copy filename</button>
+                {['completed', 'success', 'done'].includes(detailsFile.status) && detailsFile.__direction === 'incoming' && <button type="button" onClick={() => { handleDownload(detailsFile.fileId || detailsFile.id); setDetailsFile(null); }} className="flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 text-xs font-bold text-white"><Download size={14} />Download</button>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Share window: WhatsApp, Facebook, Telegram, X, LinkedIn, Email, SMS, Copy */}
       <ShareModal
