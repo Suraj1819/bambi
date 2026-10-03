@@ -762,7 +762,7 @@ function FileRow({
           : 'border-slate-200 dark:border-slate-800'
       }`}
     >
-      <div className="flex min-w-0 items-start gap-3">
+      <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
         <FileTypeIcon file={file} />
 
         <div className="min-w-0 flex-1">
@@ -1059,7 +1059,7 @@ function EnhancedFileRow({
           : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
 
   return (
-    <div className={`group rounded-2xl border bg-white p-3 shadow-sm transition dark:bg-[#0f1115] ${selected ? 'border-violet-400 ring-2 ring-violet-500/10 dark:border-violet-500' : 'border-slate-200 hover:border-violet-200 dark:border-slate-800 dark:hover:border-violet-500/30'}`}>
+    <div className={`group w-full min-w-0 overflow-hidden rounded-2xl border bg-white p-2.5 shadow-sm transition dark:bg-[#0f1115] sm:p-3 ${selected ? 'border-violet-400 ring-2 ring-violet-500/10 dark:border-violet-500' : 'border-slate-200 hover:border-violet-200 dark:border-slate-800 dark:hover:border-violet-500/30'}`}>
       <div className="flex min-w-0 items-start gap-3">
         <button
           type="button"
@@ -1076,10 +1076,10 @@ function EnhancedFileRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p className="min-w-0 flex-1 break-words text-xs font-bold leading-5 text-slate-900 dark:text-white sm:truncate" title={file?.name}>
+            <p className="min-w-0 flex-1 overflow-hidden break-words text-[11px] font-bold leading-5 text-slate-900 dark:text-white sm:text-xs sm:truncate" title={file?.name}>
               {file?.name || 'Unnamed file'}
             </p>
-            <span className="shrink-0 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+            <span className="max-w-[30%] shrink-0 truncate text-[9px] font-semibold text-slate-400 dark:text-slate-500 sm:text-[10px]">
               {formatBytes(file?.size || 0)}
             </span>
           </div>
@@ -1143,7 +1143,7 @@ function EnhancedFileRow({
 
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2 sm:hidden">
+      <div className="mt-3 flex flex-wrap gap-2 xl:hidden">
         {isPending && isIncoming && (
           <>
             <button type="button" onClick={() => onAccept?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-[10px] font-bold text-white"><CheckCircle size={13} />Accept</button>
@@ -2952,8 +2952,8 @@ export default function RoomPage() {
   return (
     <div id="room-page" className="min-h-screen w-full min-w-0 overflow-x-hidden bg-[#FBFAFF] text-slate-900 dark:bg-[#0a0b0e] dark:text-white">
       <header className="relative z-20 border-b border-slate-200/80 bg-[#FBFAFF] dark:border-slate-800/80 dark:bg-[#0a0b0e]">
-        <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mx-auto w-full max-w-[1400px] px-3 py-3 sm:px-5 sm:py-4 md:px-6 lg:px-7 xl:px-8">
+          <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -2992,7 +2992,7 @@ export default function RoomPage() {
                 </span>
               </div>
 
-              <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
                 <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">
                   WebDrop
                 </h1>
@@ -3029,7 +3029,7 @@ export default function RoomPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
               {/* Sidebar toggle: visible on all screen sizes */}
               <button
                 type="button"
@@ -3192,7 +3192,7 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-500">
+          <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-500">
             <span
               className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-sm font-extrabold tracking-wide transition-colors ${
                 lowTime
@@ -3265,7 +3265,7 @@ export default function RoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full min-w-0 max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
+      <main className="mx-auto w-full min-w-0 max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6 lg:px-7 xl:px-8">
         <ResizableSidebarLayout
           controller={sidebar}
           sidebar={
@@ -3774,7 +3774,7 @@ export default function RoomPage() {
                   {filteredIncomingFiles.length === 0 ? (
                     <EmptyQueue type="incoming" />
                   ) : (
-                    <div className={fileView === 'grid' ? 'grid gap-3 md:grid-cols-2' : 'space-y-2.5'}>
+                    <div className={fileView === 'grid' ? 'grid min-w-0 gap-3 md:grid-cols-2' : 'min-w-0 space-y-2.5'}>
                       {filteredIncomingFiles.map((file) => (
                         <EnhancedFileRow
                           key={`received-${file.fileId || file.id}`}
@@ -3876,7 +3876,7 @@ export default function RoomPage() {
                   {filteredOutgoingFiles.length === 0 ? (
                     <EmptyQueue type="outgoing" onShare={() => fileInputRef.current?.click()} />
                   ) : (
-                    <div className={fileView === 'grid' ? 'grid gap-3 md:grid-cols-2' : 'space-y-2.5'}>
+                    <div className={fileView === 'grid' ? 'grid min-w-0 gap-3 md:grid-cols-2' : 'min-w-0 space-y-2.5'}>
                       {filteredOutgoingFiles.map((file) => (
                         <EnhancedFileRow
                           key={`sent-${file.fileId || file.id}`}
@@ -3898,7 +3898,7 @@ export default function RoomPage() {
               </div>
             </section>
 
-            <section className="grid gap-5 lg:grid-cols-2">
+            <section className="grid min-w-0 gap-5 lg:grid-cols-2">
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="mb-4 flex items-start justify-between">
                   <div>
@@ -4157,7 +4157,7 @@ export default function RoomPage() {
               </div>
             </section>
 
-            <section className="grid gap-5 lg:grid-cols-2">
+            <section className="grid min-w-0 gap-5 lg:grid-cols-2">
               <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="flex items-start justify-between">
                   <div>
