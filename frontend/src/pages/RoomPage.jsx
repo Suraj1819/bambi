@@ -423,6 +423,14 @@ function FileTypeIcon({ file }) {
   );
 }
 
+function statusLabelText(status = '') {
+  if (['completed', 'success', 'done'].includes(status)) return 'Completed';
+  if (['failed', 'error'].includes(status)) return 'Failed';
+  if (['cancelled', 'canceled', 'rejected'].includes(status)) return 'Cancelled';
+  if (['sending', 'receiving', 'transferring', 'active'].includes(status)) return 'In progress';
+  return 'Waiting';
+}
+
 function formatSpeed(bytesPerSecond = 0) {
   if (!bytesPerSecond || bytesPerSecond <= 0) {
     return '—';
@@ -695,7 +703,7 @@ function SpeedometerIndicator({ quality }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* File row                                                                   */
+/* File row                                         */
 /* -------------------------------------------------------------------------- */
 
 function FileRow({
@@ -762,7 +770,7 @@ function FileRow({
           : 'border-slate-200 dark:border-slate-800'
       }`}
     >
-      <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
+      <div className="flex min-w-0 items-start gap-3">
         <FileTypeIcon file={file} />
 
         <div className="min-w-0 flex-1">
@@ -1035,6 +1043,16 @@ function EnhancedFileRow({
   const fileId = file?.fileId || file?.id;
   const meta = getFileTypeMeta(file);
   const Icon = meta.Icon;
+  const [showDetails, setShowDetails] = useState(false);
+  const detailRows = [
+    ['Type', file?.mimeType || file?.type || meta.label],
+    ['Size', formatBytes(file?.size || 0)],
+    ['Direction', isIncoming ? 'Received' : 'Sent'],
+    ['Status', statusLabelText(status)],
+    ['Transferred', `${formatBytes(transferred)} (${Math.round(progress)}%)`],
+    ['Speed', formatSpeed(speed)],
+    ['Path', file?.relativePath || file?.name || '—'],
+  ];
 
   const statusLabel = isActive
     ? isIncoming ? 'Receiving' : 'Sending'
@@ -1059,7 +1077,7 @@ function EnhancedFileRow({
           : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300';
 
   return (
-    <div className={`group w-full min-w-0 overflow-hidden rounded-2xl border bg-white p-2.5 shadow-sm transition dark:bg-[#0f1115] sm:p-3 ${selected ? 'border-violet-400 ring-2 ring-violet-500/10 dark:border-violet-500' : 'border-slate-200 hover:border-violet-200 dark:border-slate-800 dark:hover:border-violet-500/30'}`}>
+    <div className={`group rounded-2xl border bg-white p-3 shadow-sm transition dark:bg-[#0f1115] ${selected ? 'border-violet-400 ring-2 ring-violet-500/10 dark:border-violet-500' : 'border-slate-200 hover:border-violet-200 dark:border-slate-800 dark:hover:border-violet-500/30'}`}>
       <div className="flex min-w-0 items-start gap-3">
         <button
           type="button"
@@ -1076,10 +1094,10 @@ function EnhancedFileRow({
 
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p className="min-w-0 flex-1 overflow-hidden break-words text-[11px] font-bold leading-5 text-slate-900 dark:text-white sm:text-xs sm:truncate" title={file?.name}>
+            <p className="min-w-0 flex-1 break-words text-xs font-bold leading-5 text-slate-900 dark:text-white sm:truncate" title={file?.name}>
               {file?.name || 'Unnamed file'}
             </p>
-            <span className="max-w-[30%] shrink-0 truncate text-[9px] font-semibold text-slate-400 dark:text-slate-500 sm:text-[10px]">
+            <span className="shrink-0 text-[10px] font-semibold text-slate-400 dark:text-slate-500">
               {formatBytes(file?.size || 0)}
             </span>
           </div>
@@ -1123,7 +1141,7 @@ function EnhancedFileRow({
         </div>
 
         <div className="hidden shrink-0 items-center gap-1.5 xl:flex">
-          <button type="button" onClick={() => onDetails?.(file)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/10 dark:hover:text-violet-400" title="View file details" aria-label="View file details">
+          <button type="button" onClick={() => setShowDetails((v) => !v)} aria-expanded={showDetails} className={`flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-violet-50 hover:text-violet-600 dark:hover:bg-violet-500/10 dark:hover:text-violet-400 ${showDetails ? 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400' : 'text-slate-400'}`} title="View file details" aria-label="View file details">
             <Eye size={14} />
           </button>
           <button type="button" onClick={() => onCopyName?.(file?.name)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-violet-600 dark:hover:bg-slate-800 dark:hover:text-violet-400" title="Copy filename">
@@ -1143,7 +1161,7 @@ function EnhancedFileRow({
 
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2 xl:hidden">
+      <div className="mt-3 flex flex-wrap gap-2 sm:hidden">
         {isPending && isIncoming && (
           <>
             <button type="button" onClick={() => onAccept?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-violet-600 text-[10px] font-bold text-white"><CheckCircle size={13} />Accept</button>
@@ -1154,70 +1172,17 @@ function EnhancedFileRow({
         {isCompleted && isIncoming && <button type="button" onClick={() => onDownload?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-[10px] font-bold dark:border-slate-700"><Download size={13} />Download</button>}
         {isFailed && <button type="button" onClick={() => onRetry?.(fileId)} className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 text-[10px] font-bold dark:border-slate-700"><RotateCcw size={13} />Retry</button>}
       </div>
-    </div>
-  );
-}
 
-/* -------------------------------------------------------------------------- */
-/* Desktop file details modal                                                */
-/* -------------------------------------------------------------------------- */
-
-function FileDetailsModal({ file, onClose }) {
-  if (!file) return null;
-
-  const isIncoming = file.direction === 'incoming';
-  const status = file.status || 'pending';
-  const transferred = isIncoming
-    ? Number(file.bytesReceived || file.receivedBytes || 0)
-    : Number(file.bytesSent || file.sentBytes || 0);
-  const progress = file.size > 0
-    ? Math.min(100, Math.max(0, Number(file.progress || 0), (transferred / file.size) * 100))
-    : 0;
-
-  return (
-    <div className="fixed inset-0 z-[120] hidden items-center justify-center bg-slate-950/45 p-6 backdrop-blur-sm xl:flex" role="dialog" aria-modal="true" aria-label="File details">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="Close file details" onClick={onClose} />
-      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-[#101217]">
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-6 py-5 dark:border-slate-800">
-          <div className="min-w-0">
-            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-500">File details</p>
-            <h3 className="mt-1 truncate text-base font-extrabold text-slate-900 dark:text-white" title={file.name}>{file.name || 'Unnamed file'}</h3>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">{formatBytes(file.size || 0)} · {isIncoming ? 'Received' : 'Sent'}</p>
-          </div>
-          <button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-white" aria-label="Close">
-            <X size={17} />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 p-6">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
-            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Status</p>
-            <p className="mt-1 text-sm font-bold capitalize text-slate-800 dark:text-slate-100">{status}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
-            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Progress</p>
-            <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{Math.round(progress)}%</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
-            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Transferred</p>
-            <p className="mt-1 text-sm font-bold text-slate-800 dark:text-slate-100">{formatBytes(transferred)}</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
-            <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Type</p>
-            <p className="mt-1 truncate text-sm font-bold text-slate-800 dark:text-slate-100">{getFileTypeMeta(file).label}</p>
-          </div>
-          {file.relativePath && file.relativePath !== file.name && (
-            <div className="col-span-2 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-[#15171d]">
-              <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Path</p>
-              <p className="mt-1 break-all text-xs font-semibold text-slate-700 dark:text-slate-200">{file.relativePath}</p>
+      {showDetails && (
+        <div className="mt-3 hidden rounded-xl border border-slate-100 bg-slate-50/80 px-4 py-1 dark:border-slate-800 dark:bg-slate-900/50 xl:block">
+          {detailRows.map(([label, value]) => (
+            <div key={label} className="flex items-start justify-between gap-4 border-b border-slate-100 py-2 last:border-b-0 dark:border-slate-800">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">{label}</span>
+              <span className="max-w-[70%] break-all text-right text-[11px] font-semibold text-slate-800 dark:text-slate-200">{value}</span>
             </div>
-          )}
+          ))}
         </div>
-
-        <div className="flex justify-end border-t border-slate-100 px-6 py-4 dark:border-slate-800">
-          <button type="button" onClick={onClose} className="h-9 rounded-xl bg-violet-600 px-4 text-xs font-bold text-white transition hover:bg-violet-700">Close</button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -1472,18 +1437,6 @@ export default function RoomPage() {
    */
   const sidebar = useResizableSidebar();
 
-  const [isDesktopLayout, setIsDesktopLayout] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(min-width: 1280px)').matches : false,
-  );
-
-  useEffect(() => {
-    const media = window.matchMedia('(min-width: 1280px)');
-    const handleChange = () => setIsDesktopLayout(media.matches);
-    handleChange();
-    media.addEventListener?.('change', handleChange);
-    return () => media.removeEventListener?.('change', handleChange);
-  }, []);
-
   const [joining, setJoining] = useState(true);
   const [roomError, setRoomError] = useState('');
   const [roomExpired, setRoomExpired] = useState(false);
@@ -1500,7 +1453,6 @@ export default function RoomPage() {
   const [fileView, setFileView] = useState('list');
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [showConnectionDetails, setShowConnectionDetails] = useState(false);
-  const [fileDetails, setFileDetails] = useState(null);
   const [activity, setActivity] = useState([]);
 
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
@@ -2950,10 +2902,10 @@ export default function RoomPage() {
   }
 
   return (
-    <div id="room-page" className="min-h-screen w-full min-w-0 overflow-x-hidden bg-[#FBFAFF] text-slate-900 dark:bg-[#0a0b0e] dark:text-white">
+    <div className="min-h-screen bg-[#FBFAFF] text-slate-900 dark:bg-[#0a0b0e] dark:text-white">
       <header className="relative z-20 border-b border-slate-200/80 bg-[#FBFAFF] dark:border-slate-800/80 dark:bg-[#0a0b0e]">
-        <div className="mx-auto w-full max-w-[1400px] px-3 py-3 sm:px-5 sm:py-4 md:px-6 lg:px-7 xl:px-8">
-          <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2">
@@ -2992,7 +2944,7 @@ export default function RoomPage() {
                 </span>
               </div>
 
-              <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
+              <div className="mt-2 flex flex-wrap items-center gap-3">
                 <h1 className="text-xl font-extrabold tracking-tight sm:text-2xl">
                   WebDrop
                 </h1>
@@ -3029,7 +2981,7 @@ export default function RoomPage() {
               </p>
             </div>
 
-            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 lg:w-auto lg:justify-end">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Sidebar toggle: visible on all screen sizes */}
               <button
                 type="button"
@@ -3192,7 +3144,7 @@ export default function RoomPage() {
             </div>
           </div>
 
-          <div className="mt-4 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-500">
+          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-500">
             <span
               className={`inline-flex items-center gap-2 rounded-lg px-2.5 py-1 text-sm font-extrabold tracking-wide transition-colors ${
                 lowTime
@@ -3265,12 +3217,11 @@ export default function RoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full min-w-0 max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 md:px-6 md:py-6 lg:px-7 xl:px-8">
+      <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
         <ResizableSidebarLayout
           controller={sidebar}
           sidebar={
-            isDesktopLayout ? (
-            <aside className="min-h-0 min-w-0 space-y-5">
+            <aside className="min-h-0 space-y-5">
               <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
                   <div className="flex items-center justify-between">
@@ -3384,7 +3335,6 @@ export default function RoomPage() {
                 />
               </section>
             </aside>
-            ) : null
           }
         >
           {/* ============================================================
@@ -3530,12 +3480,12 @@ export default function RoomPage() {
               <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="border-b border-slate-100 p-5 dark:border-slate-800 sm:p-6">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
                           <HardDrive size={18} />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-violet-600 dark:text-violet-400">
                             Transfer manager
                           </p>
@@ -3550,24 +3500,24 @@ export default function RoomPage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[470px]">
-                      <div className="rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-slate-900/60">
+                      <div className="min-w-0 rounded-2xl bg-slate-50 px-3 py-2.5 dark:bg-slate-900/60">
                         <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Total files</p>
                         <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{allRoomFiles.length}</p>
-                        <p className="mt-0.5 text-[9px] text-slate-400">{incoming.length} received · {outgoing.length} sent</p>
+                        <p className="mt-0.5 truncate text-[9px] text-slate-400">{incoming.length} received · {outgoing.length} sent</p>
                       </div>
-                      <div className="rounded-2xl bg-violet-50 px-3 py-2.5 dark:bg-violet-500/10">
+                      <div className="min-w-0 rounded-2xl bg-violet-50 px-3 py-2.5 dark:bg-violet-500/10">
                         <p className="text-[9px] font-extrabold uppercase tracking-wider text-violet-500">Active</p>
                         <p className="mt-1 text-sm font-extrabold text-violet-700 dark:text-violet-400">{activeIncoming.length + activeOutgoing.length}</p>
                         <p className="mt-0.5 text-[9px] text-violet-500/80">Live transfers</p>
                       </div>
-                      <div className="rounded-2xl bg-emerald-50 px-3 py-2.5 dark:bg-emerald-500/10">
+                      <div className="min-w-0 rounded-2xl bg-emerald-50 px-3 py-2.5 dark:bg-emerald-500/10">
                         <p className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-500">Received</p>
-                        <p className="mt-1 text-sm font-extrabold text-emerald-700 dark:text-emerald-400">{formatBytes(totalIncomingReceived)}</p>
+                        <p className="mt-1 truncate text-sm font-extrabold text-emerald-700 dark:text-emerald-400">{formatBytes(totalIncomingReceived)}</p>
                         <p className="mt-0.5 text-[9px] text-emerald-600/70">From peer</p>
                       </div>
-                      <div className="rounded-2xl bg-blue-50 px-3 py-2.5 dark:bg-blue-500/10">
+                      <div className="min-w-0 rounded-2xl bg-blue-50 px-3 py-2.5 dark:bg-blue-500/10">
                         <p className="text-[9px] font-extrabold uppercase tracking-wider text-blue-500">Sent</p>
-                        <p className="mt-1 text-sm font-extrabold text-blue-700 dark:text-blue-400">{formatBytes(totalOutgoingSent)}</p>
+                        <p className="mt-1 truncate text-sm font-extrabold text-blue-700 dark:text-blue-400">{formatBytes(totalOutgoingSent)}</p>
                         <p className="mt-0.5 text-[9px] text-blue-600/70">To peer</p>
                       </div>
                     </div>
@@ -3697,11 +3647,11 @@ export default function RoomPage() {
               <div className="overflow-hidden rounded-3xl border border-blue-200/70 bg-white shadow-sm dark:border-blue-500/20 dark:bg-[#0f1115]">
                 <div className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 via-white to-emerald-50/50 p-5 dark:border-blue-500/10 dark:from-blue-500/[0.08] dark:via-[#0f1115] dark:to-emerald-500/[0.04] sm:p-6">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex items-start gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
                         <ArrowDownToLine size={20} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Received</h3>
                           <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
@@ -3722,22 +3672,22 @@ export default function RoomPage() {
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Received</p>
-                      <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalIncomingReceived)}</p>
+                      <p className="mt-1 truncate text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalIncomingReceived)}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Data received</p>
                     </div>
-                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Completed</p>
                       <p className="mt-1 text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{completedIncoming.length}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Ready to download</p>
                     </div>
-                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Waiting</p>
                       <p className="mt-1 text-sm font-extrabold text-amber-600 dark:text-amber-400">{pendingIncoming.length}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Needs approval</p>
                     </div>
-                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Failed</p>
                       <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">{failedIncoming.length}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Transfer errors</p>
@@ -3774,7 +3724,7 @@ export default function RoomPage() {
                   {filteredIncomingFiles.length === 0 ? (
                     <EmptyQueue type="incoming" />
                   ) : (
-                    <div className={fileView === 'grid' ? 'grid min-w-0 gap-3 md:grid-cols-2' : 'min-w-0 space-y-2.5'}>
+                    <div className={fileView === 'grid' ? 'grid gap-3 md:grid-cols-2' : 'space-y-2.5'}>
                       {filteredIncomingFiles.map((file) => (
                         <EnhancedFileRow
                           key={`received-${file.fileId || file.id}`}
@@ -3789,7 +3739,6 @@ export default function RoomPage() {
                           onCancel={(id) => handleCancel(id, 'incoming')}
                           onRemove={handleRemove}
                           onCopyName={handleCopyName}
-                          onDetails={setFileDetails}
                           compact={fileView === 'grid'}
                         />
                       ))}
@@ -3802,11 +3751,11 @@ export default function RoomPage() {
               <div className="overflow-hidden rounded-3xl border border-violet-200/70 bg-white shadow-sm dark:border-violet-500/20 dark:bg-[#0f1115]">
                 <div className="border-b border-violet-100 bg-gradient-to-r from-violet-50/80 via-white to-fuchsia-50/50 p-5 dark:border-violet-500/10 dark:from-violet-500/[0.08] dark:via-[#0f1115] dark:to-fuchsia-500/[0.04] sm:p-6">
                   <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex items-start gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
                         <ArrowUpFromLine size={20} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Sent</h3>
                           <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
@@ -3826,22 +3775,22 @@ export default function RoomPage() {
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sent</p>
-                      <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalOutgoingSent)}</p>
+                      <p className="mt-1 truncate text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalOutgoingSent)}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Data transferred</p>
                     </div>
-                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Delivered</p>
                       <p className="mt-1 text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{completedOutgoing.length}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Completed transfers</p>
                     </div>
-                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sending</p>
                       <p className="mt-1 text-sm font-extrabold text-violet-600 dark:text-violet-400">{activeOutgoing.length}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Live transfers</p>
                     </div>
-                    <div className="rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
+                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
                       <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Failed</p>
                       <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">{failedOutgoing.length}</p>
                       <p className="mt-0.5 text-[9px] text-slate-400">Transfer errors</p>
@@ -3876,7 +3825,7 @@ export default function RoomPage() {
                   {filteredOutgoingFiles.length === 0 ? (
                     <EmptyQueue type="outgoing" onShare={() => fileInputRef.current?.click()} />
                   ) : (
-                    <div className={fileView === 'grid' ? 'grid min-w-0 gap-3 md:grid-cols-2' : 'min-w-0 space-y-2.5'}>
+                    <div className={fileView === 'grid' ? 'grid gap-3 md:grid-cols-2' : 'space-y-2.5'}>
                       {filteredOutgoingFiles.map((file) => (
                         <EnhancedFileRow
                           key={`sent-${file.fileId || file.id}`}
@@ -3888,7 +3837,6 @@ export default function RoomPage() {
                           onCancel={(id) => handleCancel(id, 'outgoing')}
                           onRemove={handleRemove}
                           onCopyName={handleCopyName}
-                          onDetails={setFileDetails}
                           compact={fileView === 'grid'}
                         />
                       ))}
@@ -3898,8 +3846,8 @@ export default function RoomPage() {
               </div>
             </section>
 
-            <section className="grid min-w-0 gap-5 lg:grid-cols-2">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+            <section className="grid gap-5 lg:grid-cols-2">
+              <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="mb-4 flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-violet-600 dark:text-violet-400">
@@ -3915,7 +3863,7 @@ export default function RoomPage() {
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
+                  <div className="min-w-0 rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Files
                     </p>
@@ -3929,7 +3877,7 @@ export default function RoomPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
+                  <div className="min-w-0 rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Active
                     </p>
@@ -3943,7 +3891,7 @@ export default function RoomPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
+                  <div className="min-w-0 rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Received
                     </p>
@@ -3957,7 +3905,7 @@ export default function RoomPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
+                  <div className="min-w-0 rounded-2xl bg-slate-50 p-4 dark:bg-slate-900/60">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       Sent
                     </p>
@@ -3974,7 +3922,7 @@ export default function RoomPage() {
               </div>
 
               <div
-                className={`rounded-3xl border p-5 shadow-sm transition ${
+                className={`min-w-0 rounded-3xl border p-5 shadow-sm transition ${
                   connected && peerCount >= 2
                     ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/20 dark:bg-emerald-500/5'
                     : 'border-slate-200 bg-white dark:border-slate-800 dark:bg-[#0f1115]'
@@ -4128,7 +4076,7 @@ export default function RoomPage() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-3 rounded-xl border border-dashed border-slate-200 p-3 dark:border-slate-800">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800/80 dark:text-slate-500">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-400 dark:bg-slate-800/80 dark:text-slate-500">
                           <Users size={18} />
                         </div>
 
@@ -4145,7 +4093,7 @@ export default function RoomPage() {
                         <button
                           type="button"
                           onClick={handleShare}
-                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
                         >
                           <Share2 size={12} />
                           Share
@@ -4157,8 +4105,8 @@ export default function RoomPage() {
               </div>
             </section>
 
-            <section className="grid min-w-0 gap-5 lg:grid-cols-2">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+            <section className="grid gap-5 lg:grid-cols-2">
+              <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-violet-600 dark:text-violet-400">Live transfer</p>
@@ -4169,11 +4117,11 @@ export default function RoomPage() {
 
                 <div className="mt-5 rounded-2xl border border-slate-100 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
                   <div className="flex items-center justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Current speed</p>
-                      <p className="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{formatSpeed(totalActiveSpeed)}</p>
+                      <p className="mt-1 truncate text-2xl font-extrabold text-slate-900 dark:text-white">{formatSpeed(totalActiveSpeed)}</p>
                     </div>
-                    <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
                       <Zap size={20} />
                     </div>
                   </div>
@@ -4188,20 +4136,20 @@ export default function RoomPage() {
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-slate-100 p-3 dark:border-slate-800">
+                  <div className="min-w-0 rounded-2xl border border-slate-100 p-3 dark:border-slate-800">
                     <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sent</p>
-                    <p className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{formatBytes(totalOutgoingSent)}</p>
+                    <p className="mt-1 truncate text-base font-extrabold text-slate-900 dark:text-white">{formatBytes(totalOutgoingSent)}</p>
                     <p className="mt-1 text-[9px] text-slate-400">{outgoing.length} outgoing files</p>
                   </div>
-                  <div className="rounded-2xl border border-slate-100 p-3 dark:border-slate-800">
+                  <div className="min-w-0 rounded-2xl border border-slate-100 p-3 dark:border-slate-800">
                     <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Received</p>
-                    <p className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{formatBytes(totalIncomingReceived)}</p>
+                    <p className="mt-1 truncate text-base font-extrabold text-slate-900 dark:text-white">{formatBytes(totalIncomingReceived)}</p>
                     <p className="mt-1 text-[9px] text-slate-400">{incoming.length} incoming files</p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
+              <div className="min-w-0 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-[10px] font-extrabold uppercase tracking-[0.15em] text-violet-600 dark:text-violet-400">Session history</p>
@@ -4233,7 +4181,7 @@ export default function RoomPage() {
             <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-[#0f1115]">
               <div className="flex items-center gap-3">
                 <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                     connected
                       ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
                       : 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
@@ -4246,7 +4194,7 @@ export default function RoomPage() {
                   )}
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
                     {connected
                       ? 'Ready for peer-to-peer transfer'
@@ -4283,10 +4231,6 @@ export default function RoomPage() {
           </section>
         </ResizableSidebarLayout>
       </main>
-
-      {isDesktopLayout && (
-        <FileDetailsModal file={fileDetails} onClose={() => setFileDetails(null)} />
-      )}
 
       {/* Share window: WhatsApp, Facebook, Telegram, X, LinkedIn, Email, SMS, Copy */}
       <ShareModal
