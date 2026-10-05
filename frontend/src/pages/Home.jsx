@@ -68,7 +68,7 @@ const APP_DOWNLOADS = [
         version: '1.0.0',
         url: 'https://github.com/Suraj1819/bambi/releases/download/v1.0.0/WebDrop-1.0.0.apk',
         size: '',
-        date: '59 MB',
+        date: '62 MB',
       },
     ],
   },
@@ -83,7 +83,7 @@ const APP_DOWNLOADS = [
       {
         version: '1.0.0',
         url: 'https://github.com/Suraj1819/bambi/releases/download/v1.0.0/WebDrop.Setup.1.0.0.exe',
-        size: '81 MB',
+        size: '85 MB',
         date: '',
       },
     ],
