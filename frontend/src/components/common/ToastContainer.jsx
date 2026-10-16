@@ -51,10 +51,7 @@ export function pushToast({
 }
 
 export function dismissToast(id) {
-  toasts = toasts.filter(
-    (item) => item.id !== id
-  );
-
+  toasts = toasts.filter((item) => item.id !== id);
   emit();
 }
 
@@ -65,9 +62,7 @@ export function useToasts() {
     listeners.push(setState);
 
     return () => {
-      listeners = listeners.filter(
-        (listener) => listener !== setState
-      );
+      listeners = listeners.filter((listener) => listener !== setState);
     };
   }, []);
 
@@ -121,8 +116,7 @@ const TOAST_CONFIG = {
 
   error: {
     Icon: AlertCircle,
-    icon:
-      'bg-red-500/10 text-red-600 dark:bg-red-400/10 dark:text-red-400',
+    icon: 'bg-red-500/10 text-red-600 dark:bg-red-400/10 dark:text-red-400',
   },
 
   warning: {
@@ -142,29 +136,17 @@ const TOAST_CONFIG = {
    TOAST ITEM
 ============================================================ */
 
-function ToastItem({
-  toast: item,
-  onDismiss,
-}) {
-  const [visible, setVisible] =
-    useState(false);
-
-  const [leaving, setLeaving] =
-    useState(false);
+function ToastItem({ toast: item, onDismiss }) {
+  const [visible, setVisible] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const timerRef = useRef(null);
   const closeTimerRef = useRef(null);
 
-  const config =
-    TOAST_CONFIG[item.type] ||
-    TOAST_CONFIG.info;
-
+  const config = TOAST_CONFIG[item.type] || TOAST_CONFIG.info;
   const { Icon } = config;
 
-  /* ----------------------------------------------------------
-     ENTER
-  ---------------------------------------------------------- */
-
+  /* Enter */
   useEffect(() => {
     const timer = requestAnimationFrame(() => {
       setVisible(true);
@@ -175,10 +157,7 @@ function ToastItem({
     };
   }, []);
 
-  /* ----------------------------------------------------------
-     AUTO DISMISS
-  ---------------------------------------------------------- */
-
+  /* Auto dismiss */
   useEffect(() => {
     if (item.duration <= 0) {
       return;
@@ -195,10 +174,6 @@ function ToastItem({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ----------------------------------------------------------
-     DISMISS
-  ---------------------------------------------------------- */
-
   const handleDismiss = () => {
     if (leaving) {
       return;
@@ -212,10 +187,6 @@ function ToastItem({
     }, 180);
   };
 
-  /* ----------------------------------------------------------
-     CLEANUP
-  ---------------------------------------------------------- */
-
   useEffect(() => {
     return () => {
       clearTimeout(timerRef.current);
@@ -225,16 +196,8 @@ function ToastItem({
 
   return (
     <div
-      role={
-        item.type === 'error'
-          ? 'alert'
-          : 'status'
-      }
-      aria-live={
-        item.type === 'error'
-          ? 'assertive'
-          : 'polite'
-      }
+      role={item.type === 'error' ? 'alert' : 'status'}
+      aria-live={item.type === 'error' ? 'assertive' : 'polite'}
       className={`
         pointer-events-auto
         w-full
@@ -253,16 +216,12 @@ function ToastItem({
         dark:shadow-[0_12px_35px_rgba(0,0,0,0.32)]
         ${
           visible && !leaving
-            ? 'translate-y-0 scale-100 opacity-100'
-            : 'translate-y-2 scale-[0.98] opacity-0'
+            ? 'translate-y-0 translate-x-0 scale-100 opacity-100'
+            : '-translate-y-2 translate-x-1 scale-[0.98] opacity-0'
         }
       `}
     >
       <div className="flex min-h-[68px] items-center px-3.5 py-3">
-        {/* ==================================================
-           ICON
-        ================================================== */}
-
         <div
           className={`
             mr-3
@@ -276,15 +235,8 @@ function ToastItem({
             ${config.icon}
           `}
         >
-          <Icon
-            className="h-[18px] w-[18px]"
-            strokeWidth={2.1}
-          />
+          <Icon className="h-[18px] w-[18px]" strokeWidth={2.1} />
         </div>
-
-        {/* ==================================================
-           CONTENT
-        ================================================== */}
 
         <div className="min-w-0 flex-1">
           {item.title && (
@@ -311,21 +263,13 @@ function ToastItem({
                 leading-[18px]
                 text-slate-500
                 dark:text-slate-400
-                ${
-                  item.title
-                    ? 'mt-[2px]'
-                    : ''
-                }
+                ${item.title ? 'mt-[2px]' : ''}
               `}
             >
               {item.message}
             </div>
           )}
         </div>
-
-        {/* ==================================================
-           CLOSE
-        ================================================== */}
 
         <button
           type="button"
@@ -354,10 +298,7 @@ function ToastItem({
             dark:focus:ring-white/10
           "
         >
-          <X
-            className="h-3.5 w-3.5"
-            strokeWidth={2}
-          />
+          <X className="h-3.5 w-3.5" strokeWidth={2} />
         </button>
       </div>
     </div>
@@ -365,7 +306,7 @@ function ToastItem({
 }
 
 /* ============================================================
-   CONTAINER
+   CONTAINER — TOP RIGHT
 ============================================================ */
 
 export default function ToastContainer() {
@@ -378,25 +319,19 @@ export default function ToastContainer() {
       className="
         pointer-events-none
         fixed
-        bottom-4
-        left-3
         right-3
+        top-[max(0.75rem,env(safe-area-inset-top))]
         z-[9999]
         flex
-        flex-col-reverse
+        w-[min(370px,calc(100vw-1.5rem))]
+        flex-col
         gap-2
-        sm:bottom-5
-        sm:left-auto
         sm:right-5
-        sm:w-[370px]
+        sm:top-[max(1rem,env(safe-area-inset-top))]
       "
     >
       {items.map((item) => (
-        <ToastItem
-          key={item.id}
-          toast={item}
-          onDismiss={dismissToast}
-        />
+        <ToastItem key={item.id} toast={item} onDismiss={dismissToast} />
       ))}
     </div>
   );

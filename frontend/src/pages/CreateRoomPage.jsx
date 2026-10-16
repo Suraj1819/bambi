@@ -1,22 +1,35 @@
+// src/pages/CreateRoom.jsx
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft,
   ArrowRight,
-  CheckCircle2,
-  Clock3,
-  ExternalLink,
+  ArrowUp,
+  Check,
+  Copy,
   Loader2,
-  QrCode,
+  Maximize2,
   Radio,
   RefreshCw,
   Share2,
   ShieldCheck,
-  Smartphone,
   Users,
   X,
+  Clock,
+  Command,
+  CircleDot,
+  Lock,
+  Wifi,
   Zap,
+  Server,
+  KeyRound,
+  FileCheck,
+  Globe,
+  Download,
+  Smartphone,
+  AlertCircle,
+  Info,
 } from 'lucide-react';
 
 import {
@@ -29,30 +42,64 @@ import {
 import { WEB_APP_URL } from '../utils/constants';
 
 import { toast } from '../components/common/ToastContainer';
-import CopyButton from '../components/common/CopyButton';
 
 /* ============================================================
    CONSTANTS
 ============================================================ */
 
 const FOCUS_RING =
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/25';
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-surface';
 
-const ROOM_FEATURES = [
+const CAPABILITIES = [
   {
     icon: ShieldCheck,
-    title: 'Direct transfer',
-    text: 'Files move directly between connected devices.',
+    title: 'End-to-end encrypted',
+    desc: 'Every byte travels over an encrypted WebRTC DataChannel.',
+    tone: 'emerald',
+  },
+  {
+    icon: Zap,
+    title: 'Direct peer-to-peer',
+    desc: 'No upload step. Files go straight between devices.',
+    tone: 'violet',
+  },
+  {
+    icon: Clock,
+    title: 'Auto-expires',
+    desc: 'Rooms self-destruct after 30 minutes of activity.',
+    tone: 'amber',
   },
   {
     icon: Users,
-    title: '2 devices',
-    text: 'One room connects one sender and one receiver.',
+    title: 'Two devices only',
+    desc: 'One sender, one receiver. No third party can join.',
+    tone: 'sky',
+  },
+];
+
+const SPECS = [
+  { label: 'Transport', value: 'WebRTC · DTLS', icon: Server },
+  { label: 'Signaling', value: 'Socket.IO', icon: Wifi },
+  { label: 'Auth', value: 'None required', icon: KeyRound },
+  { label: 'Storage', value: 'Zero on server', icon: FileCheck },
+];
+
+const FAQS = [
+  {
+    q: 'Do both devices need the same Wi-Fi?',
+    a: 'No. WebDrop finds the fastest route between devices — same network or different ones.',
   },
   {
-    icon: Clock3,
-    title: '30 minutes',
-    text: 'Rooms expire automatically after 30 minutes.',
+    q: 'Is there a file size limit?',
+    a: 'Not from us. Large files are chunked and streamed. The only real limit is disk space and connection.',
+  },
+  {
+    q: 'What if I lose connection?',
+    a: 'Active transfers pause and resume automatically when the other device reconnects.',
+  },
+  {
+    q: 'Can someone else guess my room?',
+    a: 'Codes are single-use, 5 characters, and expire in 30 minutes. Practically impossible to guess in time.',
   },
 ];
 
@@ -63,296 +110,398 @@ const ROOM_FEATURES = [
 function getDeviceInfo() {
   try {
     const ua = navigator.userAgent || '';
-
-    if (/iPhone|iPad|iPod/i.test(ua)) {
-      return 'iOS device';
-    }
-
-    if (/Android/i.test(ua)) {
-      return 'Android device';
-    }
-
-    if (/Windows/i.test(ua)) {
-      return 'Windows device';
-    }
-
-    if (/Macintosh|Mac OS X/i.test(ua)) {
-      return 'Mac device';
-    }
-
-    if (/Linux/i.test(ua)) {
-      return 'Linux device';
-    }
-
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS device';
+    if (/Android/i.test(ua)) return 'Android device';
+    if (/Windows/i.test(ua)) return 'Windows device';
+    if (/Macintosh|Mac OS X/i.test(ua)) return 'Mac device';
+    if (/Linux/i.test(ua)) return 'Linux device';
     return 'Web browser';
   } catch {
     return 'Web browser';
   }
 }
 
+async function copyToClipboard(text) {
+  if (!text) return false;
+
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // fall through
+    }
+  }
+
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    ta.style.top = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 /* ============================================================
-   SECTION HEADER
+   SMALL COMPONENTS
 ============================================================ */
 
-function SectionHeader({
-  icon: Icon,
-  eyebrow,
-  title,
-  description,
-  tone = 'purple',
-}) {
-  const isEmerald = tone === 'emerald';
+function InlineCopy({ value, label = 'Copy', variant = 'default', className = '' }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    const ok = await copyToClipboard(value);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } else {
+      toast.error('Copy failed', 'Please copy manually.');
+    }
+  };
+
+  const baseStyles =
+    variant === 'primary'
+      ? 'border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-300 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/[0.08] dark:text-violet-300 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/[0.12]'
+      : 'border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-white/[0.09] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/[0.08] dark:hover:text-violet-300';
 
   return (
-    <div className="flex items-start gap-3 sm:gap-3.5">
-      <div
-        className={`
-          flex
-          h-10
-          w-10
-          shrink-0
-          items-center
-          justify-center
-          rounded-xl
-          sm:h-11
-          sm:w-11
-          ${
-            isEmerald
-              ? 'bg-emerald-50 dark:bg-emerald-500/[0.09]'
-              : 'bg-purple-50 dark:bg-purple-500/[0.09]'
-          }
-        `}
-      >
-        <Icon
-          className={`
-            h-[18px]
-            w-[18px]
-            sm:h-5
-            sm:w-5
-            ${
-              isEmerald
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-purple-600 dark:text-purple-400'
-            }
-          `}
-          strokeWidth={2}
-        />
-      </div>
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold transition-colors sm:px-3 sm:text-[12px] ${baseStyles} ${FOCUS_RING} ${className}`}
+      aria-label={copied ? 'Copied' : label}
+    >
+      {copied ? (
+        <>
+          <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2.6} />
+          <span>Copied</span>
+        </>
+      ) : (
+        <>
+          <Copy className="h-3.5 w-3.5" strokeWidth={2.2} />
+          <span>{label}</span>
+        </>
+      )}
+    </button>
+  );
+}
 
-      <div className="min-w-0 flex-1">
-        <p
-          className={`
-            text-[10px]
-            font-semibold
-            uppercase
-            tracking-[0.12em]
-            sm:text-[11px]
-            ${
-              isEmerald
-                ? 'text-emerald-600 dark:text-emerald-400'
-                : 'text-purple-600 dark:text-purple-400'
-            }
-          `}
-        >
-          {eyebrow}
-        </p>
+function ToneStyles(tone) {
+  const map = {
+    emerald: {
+      bg: 'bg-emerald-50 dark:bg-emerald-500/[0.08]',
+      text: 'text-emerald-600 dark:text-emerald-400',
+    },
+    violet: {
+      bg: 'bg-violet-50 dark:bg-violet-500/[0.08]',
+      text: 'text-violet-600 dark:text-violet-400',
+    },
+    amber: {
+      bg: 'bg-amber-50 dark:bg-amber-500/[0.08]',
+      text: 'text-amber-600 dark:text-amber-400',
+    },
+    sky: {
+      bg: 'bg-sky-50 dark:bg-sky-500/[0.08]',
+      text: 'text-sky-600 dark:text-sky-400',
+    },
+  };
+  return map[tone] || map.violet;
+}
 
-        <h2 className="mt-1 font-heading text-[19px] font-bold leading-tight tracking-[-0.025em] text-slate-900 dark:text-white sm:text-[22px]">
-          {title}
-        </h2>
-
-        {description && (
-          <p className="mt-1.5 max-w-[560px] text-[12.5px] leading-[19px] text-slate-500 dark:text-slate-400 sm:text-[13px] sm:leading-[20px]">
-            {description}
-          </p>
-        )}
-      </div>
+function SectionLabel({ icon: Icon, children }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" strokeWidth={2.4} />
+      <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+        {children}
+      </span>
     </div>
   );
 }
 
-/* ============================================================
-   EMPTY CREATE ROOM CONTENT
-============================================================ */
+function ScrollToTop() {
+  const [visible, setVisible] = useState(false);
 
-function CreateRoomContent({
-  loading,
-  connected,
-  socket,
-  onGenerate,
-}) {
-  const isConnected = connected && socket?.connected;
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 400);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  if (!visible) return null;
 
   return (
-    <div>
-      <SectionHeader
-        icon={Radio}
-        eyebrow="New transfer"
-        title="Create your transfer room"
-        description="Generate a temporary room code and share it with the device that will receive your files."
-      />
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      aria-label="Scroll to top"
+      className={`fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-4 z-40 lg:bottom-5 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-600 shadow-lg backdrop-blur-sm transition-colors hover:border-violet-300 hover:text-violet-600 dark:border-white/[0.1] dark:bg-[#15171d]/95 dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300 sm:right-5 ${FOCUS_RING}`}
+    >
+      <ArrowUp className="h-4 w-4" strokeWidth={2.4} />
+    </button>
+  );
+}
 
-      {/* PRIMARY CREATE PANEL */}
-      <div className="mt-5 rounded-2xl border border-purple-100 bg-purple-50/60 p-4 dark:border-purple-500/10 dark:bg-purple-500/[0.045] sm:mt-6 sm:p-6">
-        <div className="flex flex-col gap-5">
+/* ============================================================
+   CREATE VIEW
+============================================================ */
+
+function CreateView({ loading, connected, socket, onGenerate }) {
+  const isConnected = Boolean(connected && socket?.connected);
+
+  return (
+    <div className="grid gap-8 lg:grid-cols-[1.35fr_1fr] lg:gap-14">
+      {/* ============ LEFT COLUMN ============ */}
+      <div className="min-w-0">
+        {/* Eyebrow */}
+        <div className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/80 px-3 py-1 dark:border-violet-500/20 dark:bg-violet-500/[0.08]">
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
+          <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+            New transfer
+          </span>
+        </div>
+
+        {/* Heading */}
+        <h1 className="mt-4 font-heading text-[28px] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white xs:text-[32px] sm:text-[42px] lg:text-[48px]">
+          Create a private
+          <span className="block bg-gradient-to-r from-violet-600 via-violet-500 to-indigo-600 bg-clip-text text-transparent">
+            transfer room.
+          </span>
+        </h1>
+
+        <p className="mt-4 max-w-[560px] text-[13.5px] leading-6 text-slate-600 dark:text-slate-400 sm:mt-5 sm:text-[14.5px] sm:leading-7">
+          One room connects exactly two devices. When you generate a code,
+          share it — that&apos;s the only key. Files never pass through our servers.
+        </p>
+
+        {/* Primary CTA block */}
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:mt-8 sm:p-6">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-purple-600 shadow-sm dark:bg-white/[0.07] dark:text-purple-400">
-              <Zap
-                className="h-[18px] w-[18px]"
-                strokeWidth={2.2}
-              />
-            </div>
-
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10 ${
+                isConnected
+                  ? 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300'
+                  : 'bg-slate-100 text-slate-400 dark:bg-white/[0.05] dark:text-slate-500'
+              }`}
+            >
+              <Radio className="h-4 w-4 sm:h-5 sm:w-5" strokeWidth={2.2} />
+            </span>
             <div className="min-w-0">
-              <p className="text-[13.5px] font-semibold text-slate-800 dark:text-slate-200 sm:text-[14px]">
-                Ready to create a room?
+              <p className="text-[13.5px] font-bold text-slate-900 dark:text-white sm:text-[14px]">
+                Generate your room code
               </p>
-
-              <p className="mt-1 text-[12px] leading-5 text-slate-500 dark:text-slate-400 sm:text-[12.5px]">
-                WebDrop will generate a unique 5-character code
-                that you can share with another device.
+              <p className="mt-1 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12.5px]">
+                {isConnected
+                  ? 'A 5-character code will be created instantly. Room closes itself in 30 minutes.'
+                  : 'Waiting for the server connection before you can create a room.'}
               </p>
             </div>
           </div>
 
-          {/* LARGE CTA */}
           <button
             type="button"
             onClick={onGenerate}
             disabled={loading || !isConnected}
-            className={`
-              ${FOCUS_RING}
-              inline-flex
-              min-h-[52px]
-              w-full
-              items-center
-              justify-center
-              gap-2
-              rounded-xl
-              bg-purple-600
-              px-5
-              text-[14px]
-              font-semibold
-              text-white
-              transition-colors
-              duration-150
-              hover:bg-purple-700
-              active:bg-purple-800
-              disabled:cursor-not-allowed
-              disabled:opacity-50
-              sm:min-h-[54px]
-              sm:rounded-2xl
-              sm:text-[14px]
-            `}
+            className={`group mt-4 inline-flex h-11 w-full items-center justify-center gap-2.5 rounded-xl bg-violet-600 px-5 text-[13.5px] font-bold text-white shadow-lg shadow-violet-600/20 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none dark:disabled:bg-white/[0.08] dark:disabled:text-slate-500 sm:mt-5 sm:h-12 sm:w-auto sm:min-w-[240px] sm:px-6 sm:text-[14px] ${FOCUS_RING}`}
           >
             {loading ? (
               <>
-                <Loader2
-                  className="h-5 w-5 animate-spin"
-                  strokeWidth={2.2}
-                />
-                Creating room...
+                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.6} />
+                <span>Creating room…</span>
+              </>
+            ) : !isConnected ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.6} />
+                <span>Connecting…</span>
               </>
             ) : (
               <>
-                Generate room
-                <ArrowRight
-                  className="h-5 w-5"
-                  strokeWidth={2.4}
-                />
+                <span>Create room</span>
+                <ArrowRight className="h-4 w-4" strokeWidth={2.6} />
               </>
             )}
           </button>
 
-          {/* CONNECTION STATUS */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <div className="flex min-w-0 items-center gap-2">
+          {/* Status strip */}
+          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-4 dark:border-white/[0.06]">
+            <div className="flex items-center gap-2">
               <span
-                className={`
-                  h-2
-                  w-2
-                  shrink-0
-                  rounded-full
-                  ${
-                    isConnected
-                      ? 'bg-emerald-500'
-                      : 'animate-pulse bg-amber-500'
-                  }
-                `}
+                className={`h-1.5 w-1.5 rounded-full ${
+                  isConnected ? 'bg-emerald-500' : 'animate-pulse bg-amber-500'
+                }`}
               />
+              <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
+                {isConnected ? 'Server connected' : 'Connecting to server…'}
+              </span>
+            </div>
+            <span className="hidden h-3 w-px bg-slate-200 dark:bg-white/[0.08] sm:block" />
+            <span className="text-[12px] text-slate-400 dark:text-slate-500">
+              Signaling only — no file storage
+            </span>
+          </div>
 
-              <p className="truncate text-[11.5px] text-slate-500 dark:text-slate-400 sm:text-[12px]">
-                {isConnected
-                  ? 'WebDrop server connected'
-                  : 'Connecting to WebDrop server...'}
+          {/* Not connected warning */}
+          {!isConnected && (
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-200/70 bg-amber-50/60 p-3 dark:border-amber-500/15 dark:bg-amber-500/[0.06]">
+              <AlertCircle
+                className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+                strokeWidth={2.4}
+              />
+              <p className="text-[11.5px] leading-relaxed text-amber-900/80 dark:text-amber-200/80">
+                <strong className="font-semibold">Waiting for connection.</strong>{' '}
+                Room creation will become available once we reach the WebDrop
+                server. This usually takes a few seconds.
               </p>
             </div>
+          )}
+        </div>
 
-            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-600">
-              Signaling only
-            </span>
+        {/* Capabilities section */}
+        <div className="mt-8 sm:mt-10">
+          <SectionLabel icon={CircleDot}>Capabilities</SectionLabel>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {CAPABILITIES.map(({ icon: Icon, title, desc, tone }) => {
+              const t = ToneStyles(tone);
+              return (
+                <div
+                  key={title}
+                  className="rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-violet-200 dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:border-violet-500/30 sm:p-4"
+                >
+                  <span
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${t.bg} ${t.text}`}
+                  >
+                    <Icon className="h-4 w-4" strokeWidth={2.2} />
+                  </span>
+                  <p className="mt-3 text-[13px] font-bold text-slate-900 dark:text-white">
+                    {title}
+                  </p>
+                  <p className="mt-1 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400">
+                    {desc}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* FAQs */}
+        <div className="mt-8 sm:mt-10">
+          <SectionLabel icon={Info}>Common questions</SectionLabel>
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
+            {FAQS.map(({ q, a }, i) => (
+              <details
+                key={q}
+                className={`group ${
+                  i !== FAQS.length - 1
+                    ? 'border-b border-slate-100 dark:border-white/[0.06]'
+                    : ''
+                }`}
+              >
+                <summary
+                  className={`flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-[12.5px] font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.03] sm:px-4 [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
+                >
+                  <span className="pr-2">{q}</span>
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition-transform group-open:rotate-45 group-open:border-violet-300 group-open:bg-violet-50 group-open:text-violet-600 dark:border-white/[0.08] dark:text-slate-500 dark:group-open:border-violet-500/30 dark:group-open:bg-violet-500/[0.08] dark:group-open:text-violet-400">
+                    <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                      <path d="M4 1v6M1 4h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                </summary>
+                <p className="px-3.5 pb-3 pr-10 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400 sm:px-4">
+                  {a}
+                </p>
+              </details>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* FEATURES */}
-      <div className="mt-4 grid gap-2.5 sm:mt-5 sm:grid-cols-3">
-        {ROOM_FEATURES.map(({ icon: Icon, title, text }) => (
-          <div
-            key={title}
-            className="
-              rounded-xl
-              border
-              border-slate-100
-              bg-slate-50/70
-              p-3
-              dark:border-white/[0.05]
-              dark:bg-white/[0.025]
-              sm:p-3.5
-            "
-          >
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white dark:bg-white/[0.06]">
-                <Icon
-                  className="h-4 w-4 text-slate-500 dark:text-slate-400"
-                  strokeWidth={1.9}
-                />
-              </div>
+      {/* ============ RIGHT COLUMN (STICKY on lg+) ============ */}
+      <aside className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:self-start">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
+          <SectionLabel icon={Command}>How it works</SectionLabel>
 
-              <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200">
-                {title}
+          <ol className="mt-4 space-y-4">
+            {[
+              ['Create a room', 'Get your 5-character code instantly.'],
+              ['Share the code', 'Send it by any channel — text, chat, verbal.'],
+              ['Send files', 'Other device enters the code. Start transferring.'],
+            ].map(([title, sub], i) => (
+              <li key={title} className="flex gap-3">
+                <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
+                  {i + 1}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-bold text-slate-900 dark:text-white">
+                    {title}
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
+                    {sub}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
+          <SectionLabel icon={Server}>Technical details</SectionLabel>
+
+          <dl className="mt-4 space-y-3">
+            {SPECS.map(({ label, value, icon: Icon }) => (
+              <div key={label} className="flex items-center justify-between gap-3">
+                <dt className="flex min-w-0 items-center gap-2 text-[12px] text-slate-500 dark:text-slate-400">
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" strokeWidth={2.2} />
+                  <span className="truncate">{label}</span>
+                </dt>
+                <dd className="shrink-0 text-right font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200 sm:text-[11.5px]">
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+
+        <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 to-emerald-50/40 p-4 dark:border-emerald-500/15 dark:from-emerald-500/[0.08] dark:to-emerald-500/[0.03] sm:p-5">
+          <div className="flex items-start gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm dark:bg-white/[0.06] dark:text-emerald-400">
+              <Lock className="h-4 w-4" strokeWidth={2.4} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[12.5px] font-bold text-emerald-900 dark:text-emerald-200">
+                Private by design
+              </p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+                Your files bypass our servers completely. We only help the two
+                devices find each other — nothing else.
               </p>
             </div>
-
-            <p className="mt-2 text-[10.5px] leading-[17px] text-slate-400 dark:text-slate-500">
-              {text}
-            </p>
           </div>
-        ))}
-      </div>
-
-      {/* PRIVACY */}
-      <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-3.5 py-3 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04] sm:px-4 sm:py-3.5">
-        <ShieldCheck
-          className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
-          strokeWidth={2}
-        />
-
-        <p className="text-[11px] leading-[18px] text-slate-500 dark:text-slate-400 sm:text-[11.5px]">
-          WebDrop does not upload or store your files on the
-          server. The server is used only to help both devices
-          establish a connection.
-        </p>
-      </div>
+        </div>
+      </aside>
     </div>
   );
 }
 
 /* ============================================================
-   GENERATED ROOM CONTENT
+   READY VIEW  (room code page — fully responsive)
+   Primary CTA always visible without scrolling
 ============================================================ */
 
-function GeneratedRoomContent({
+function ReadyView({
   roomCode,
   joinUrl,
   onOpenRoom,
@@ -361,603 +510,335 @@ function GeneratedRoomContent({
   onNewRoom,
   onCancelRoom,
 }) {
+  const codeChars = String(roomCode || '').split('');
+
   return (
-    <div>
-      {/* HEADER */}
-      <SectionHeader
-        icon={CheckCircle2}
-        eyebrow="Room ready"
-        title="Your transfer room is ready"
-        description="Share the room code or QR code with the receiving device to connect."
-        tone="emerald"
-      />
-
-      {/* ======================================================
-          ROOM CODE HERO
-      ====================================================== */}
-
-      <div className="mt-5 sm:mt-6">
-        <div className="mb-2.5 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-slate-400 dark:text-slate-500 sm:text-[11px]">
-              Room code
-            </p>
-
-            <p className="mt-0.5 text-[10px] leading-4 text-slate-400 dark:text-slate-600 sm:text-[11px]">
-              Share this code with the other device
-            </p>
-          </div>
-
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200/70 bg-emerald-50 px-2 py-1 text-[9px] font-semibold text-emerald-600 dark:border-emerald-500/20 dark:bg-emerald-500/[0.08] dark:text-emerald-400 sm:px-2.5 sm:py-1.5 sm:text-[10px]">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Active
-          </span>
-        </div>
-
-        {/* ====================================================
-            RESPONSIVE CODE CARD
-        ==================================================== */}
-
-        <div className="rounded-[20px] border border-purple-200/80 bg-purple-50/70 p-3.5 dark:border-purple-500/20 dark:bg-purple-500/[0.07] sm:rounded-[22px] sm:p-5">
-          <div
-            className="
-              flex
-              flex-col
-              gap-3
-              rounded-[16px]
-              border
-              border-purple-200/60
-              bg-white/80
-              p-3
-              dark:border-purple-500/10
-              dark:bg-white/[0.035]
-              sm:flex-row
-              sm:items-center
-              sm:justify-between
-              sm:gap-4
-              sm:p-4
-            "
+    <>
+      {/* Fixed bottom CTA — always on screen (mobile + desktop) */}
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/90 bg-white/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0f1115]/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.35)] lg:hidden">
+        <div className="mx-auto flex w-full max-w-[1200px] items-center gap-2 sm:gap-2.5">
+          <button
+            type="button"
+            onClick={onShare}
+            className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-violet-300 hover:text-violet-600 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300 ${FOCUS_RING}`}
+            aria-label="Share link"
+            title="Share link"
           >
-            {/* ROOM CODE */}
+            <Share2 className="h-4 w-4" strokeWidth={2.2} />
+          </button>
 
-            <div className="min-w-0 flex-1 overflow-hidden text-center sm:text-left">
-              <p
-                className="
-                  overflow-hidden
-                  whitespace-nowrap
-                  font-mono
-                  text-[30px]
-                  font-black
-                  leading-none
-                  tracking-[0.08em]
-                  text-purple-700
-                  dark:text-purple-300
-                  min-[380px]:text-[34px]
-                  min-[430px]:text-[36px]
-                  sm:text-[38px]
-                  sm:tracking-[0.12em]
-                  md:text-[42px]
-                  lg:text-[46px]
-                  xl:text-[48px]
-                  xl:tracking-[0.16em]
-                "
-              >
-                {roomCode}
-              </p>
-            </div>
+          <button
+            type="button"
+            onClick={onOpenRoom}
+            className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-[13px] font-bold text-white shadow-lg shadow-violet-600/25 transition-colors hover:bg-violet-700 sm:h-12 sm:px-4 sm:text-[14px] ${FOCUS_RING}`}
+          >
+            <Radio className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+            <span className="truncate">Enter room</span>
+            <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2.6} />
+          </button>
 
-            {/* COPY BUTTON */}
-
-            <div className="flex shrink-0 justify-center sm:justify-end">
-              <CopyButton
-                label="Copy code"
-                value={roomCode}
-                fullWidth
-              />
-            </div>
-          </div>
-
-          {/* CODE INFORMATION */}
-
-          <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <p className="text-center text-[10.5px] leading-4 text-slate-500 dark:text-slate-400 sm:text-left sm:text-[11px]">
-              The receiving device can enter this code on
-              WebDrop.
-            </p>
-
-            <span className="text-center text-[9.5px] font-medium text-purple-500 dark:text-purple-400 sm:shrink-0 sm:text-right sm:text-[10px]">
-              5 characters
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={onCancelRoom}
+            className={`inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-[12px] font-bold text-red-600 transition-colors hover:border-red-300 hover:bg-red-100 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-400 dark:hover:border-red-500/40 dark:hover:bg-red-500/15 sm:h-12 sm:px-4 sm:text-[13px] ${FOCUS_RING}`}
+            aria-label="Cancel room"
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+            <span className="hidden xs:inline">Cancel</span>
+          </button>
         </div>
       </div>
 
-      {/* ======================================================
-          JOIN LINK
-      ====================================================== */}
+      {/* Extra bottom padding so content is not hidden behind fixed bar */}
+      <div className="grid gap-8 pb-24 lg:grid-cols-[1.35fr_1fr] lg:gap-14 lg:pb-0">
+        {/* ============ LEFT COLUMN ============ */}
+        <div className="min-w-0">
+          {/* Success badge */}
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50/80 px-3 py-1 dark:border-emerald-500/20 dark:bg-emerald-500/[0.08]">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            </span>
+            <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+              Room is live
+            </span>
+          </div>
 
-      <div className="mt-5">
-        <div className="mb-2.5 flex items-center justify-between gap-3">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 sm:text-[11px]">
-            Join link
-          </span>
+          <h1 className="mt-3 font-heading text-[24px] font-extrabold leading-[1.12] tracking-[-0.035em] text-slate-900 dark:text-white sm:mt-4 sm:text-[36px] lg:text-[44px]">
+            Share this code
+            <span className="block text-slate-400 dark:text-slate-500">
+              with the other device
+            </span>
+          </h1>
 
-          <span className="text-[9.5px] text-slate-400 dark:text-slate-600 sm:text-[10.5px]">
-            Direct access
-          </span>
-        </div>
+          <p className="mt-2 max-w-[520px] text-[13px] leading-6 text-slate-600 dark:text-slate-400 sm:mt-3 sm:text-[14px]">
+            Anyone who enters this code on WebDrop joins your room. It&apos;s
+            single-use, expires in 30 minutes, and only works once.
+          </p>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-white/[0.07] dark:bg-white/[0.025]">
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="min-w-0 flex-1 px-1.5 py-1 sm:px-2">
-              <p className="truncate text-[10.5px] text-slate-500 dark:text-slate-400 sm:text-[12px]">
-                {joinUrl}
+          {/* Room code card */}
+          <div className="mt-4 rounded-2xl border border-violet-200/70 bg-gradient-to-br from-violet-50/80 via-violet-50/40 to-white p-4 dark:border-violet-500/20 dark:from-violet-500/[0.08] dark:via-violet-500/[0.04] dark:to-transparent sm:mt-6 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700/70 dark:text-violet-300/70">
+                Room code
               </p>
+              <InlineCopy value={roomCode} label="Copy code" variant="primary" />
             </div>
 
-            <div className="flex shrink-0 gap-1.5">
-              <CopyButton
-                label="Copy link"
-                value={joinUrl}
-              />
+            <div className="mt-3 flex w-full items-stretch justify-center gap-1.5 sm:mt-4 sm:gap-2.5 md:gap-3">
+              {codeChars.map((char, i) => (
+                <span
+                  key={`${char}-${i}`}
+                  className="flex h-11 min-w-0 flex-1 items-center justify-center rounded-lg border border-violet-200/60 bg-white font-mono text-[18px] font-black text-violet-700 shadow-sm dark:border-violet-500/20 dark:bg-white/[0.04] dark:text-violet-300 xs:h-12 xs:text-[20px] sm:h-14 sm:rounded-xl sm:text-[26px] md:h-16 md:text-[32px]"
+                  style={{ maxWidth: '4.5rem' }}
+                >
+                  {char}
+                </span>
+              ))}
+            </div>
 
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] sm:mt-4 sm:gap-x-4">
+              <span className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <Clock className="h-3 w-3 shrink-0" strokeWidth={2.4} />
+                Expires in 30 min
+              </span>
+              <span className="hidden h-3 w-px bg-slate-300 dark:bg-white/[0.1] sm:block" />
+              <span className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <Users className="h-3 w-3 shrink-0" strokeWidth={2.4} />
+                Single-use only
+              </span>
+              <span className="hidden h-3 w-px bg-slate-300 dark:bg-white/[0.1] sm:block" />
+              <span className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                <KeyRound className="h-3 w-3 shrink-0" strokeWidth={2.4} />
+                Case-insensitive
+              </span>
+            </div>
+          </div>
+
+          {/* Desktop primary actions — Enter + Cancel side by side */}
+          <div className="mt-4 hidden gap-3 lg:flex">
+            <button
+              type="button"
+              onClick={onOpenRoom}
+              className={`inline-flex h-12 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl bg-violet-600 px-6 text-[14px] font-bold text-white shadow-lg shadow-violet-600/20 transition-colors hover:bg-violet-700 ${FOCUS_RING}`}
+            >
+              <Radio className="h-4 w-4" strokeWidth={2.4} />
+              <span>Enter the room</span>
+              <ArrowRight className="h-4 w-4" strokeWidth={2.6} />
+            </button>
+
+            <button
+              type="button"
+              onClick={onCancelRoom}
+              className={`inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 text-[13.5px] font-bold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 dark:border-red-500/25 dark:bg-transparent dark:text-red-400 dark:hover:border-red-500/40 dark:hover:bg-red-500/10 ${FOCUS_RING}`}
+            >
+              <X className="h-4 w-4" strokeWidth={2.4} />
+              <span>Cancel room</span>
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="my-5 flex items-center gap-3 sm:my-6">
+            <div className="h-px flex-1 bg-slate-200 dark:bg-white/[0.06]" />
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
+              Or share a link
+            </span>
+            <div className="h-px flex-1 bg-slate-200 dark:bg-white/[0.06]" />
+          </div>
+
+          {/* Join link */}
+          <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+            <div className="flex items-center gap-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">
+                <Globe className="h-3.5 w-3.5" strokeWidth={2.2} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Direct link
+                </p>
+                <p className="mt-0.5 truncate font-mono text-[11px] text-slate-700 dark:text-slate-300 sm:text-[11.5px]">
+                  {joinUrl}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-col gap-2 xs:flex-row xs:items-center">
+              <InlineCopy value={joinUrl} label="Copy link" className="w-full xs:flex-1" />
               <button
                 type="button"
                 onClick={onOpenJoinLink}
-                className={`
-                  ${FOCUS_RING}
-                  inline-flex
-                  h-10
-                  items-center
-                  justify-center
-                  gap-1.5
-                  rounded-xl
-                  border
-                  border-slate-200
-                  bg-white
-                  px-3
-                  text-[12px]
-                  font-semibold
-                  text-slate-600
-                  transition-colors
-                  hover:border-purple-300
-                  hover:bg-purple-50
-                  hover:text-purple-700
-                  dark:border-white/[0.09]
-                  dark:bg-white/[0.035]
-                  dark:text-slate-300
-                  dark:hover:border-purple-500/30
-                  dark:hover:bg-purple-500/[0.06]
-                  dark:hover:text-purple-300
-                `}
-                aria-label="Open join link"
+                aria-label="Open link in new tab"
+                className={`inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-[12px] font-semibold text-slate-700 transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-white/[0.09] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/[0.08] dark:hover:text-violet-300 xs:w-auto ${FOCUS_RING}`}
               >
-                <ExternalLink
-                  className="h-3.5 w-3.5"
-                  strokeWidth={2}
-                />
-
-                <span className="hidden sm:inline">
-                  Open
-                </span>
+                <Maximize2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+                Open
               </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* ======================================================
-          MAIN ACTIONS
-      ====================================================== */}
-
-      <div className="mt-5 grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(0,1fr)_auto]">
-        {/* OPEN TRANSFER */}
-
-        <button
-          type="button"
-          onClick={onOpenRoom}
-          className={`
-            ${FOCUS_RING}
-            group
-            inline-flex
-            min-h-[50px]
-            w-full
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            bg-purple-600
-            px-5
-            text-[13px]
-            font-semibold
-            text-white
-            transition-colors
-            duration-150
-            hover:bg-purple-700
-            active:bg-purple-800
-            sm:min-h-[52px]
-          `}
-        >
-          <Radio
-            className="h-[17px] w-[17px]"
-            strokeWidth={2.2}
-          />
-
-          <span>Open transfer room</span>
-
-          <ArrowRight
-            className="h-4 w-4"
-            strokeWidth={2.4}
-          />
-        </button>
-
-        {/* CANCEL */}
-
-        <button
-          type="button"
-          onClick={onCancelRoom}
-          className={`
-            ${FOCUS_RING}
-            inline-flex
-            min-h-[48px]
-            w-full
-            items-center
-            justify-center
-            gap-2
-            rounded-xl
-            border
-            border-red-200/80
-            bg-white
-            px-5
-            text-[12.5px]
-            font-semibold
-            text-red-500
-            transition-colors
-            hover:border-red-300
-            hover:bg-red-50
-            hover:text-red-600
-            dark:border-red-500/15
-            dark:bg-white/[0.025]
-            dark:text-red-400
-            dark:hover:border-red-500/25
-            dark:hover:bg-red-500/[0.06]
-            dark:hover:text-red-300
-            sm:min-h-[52px]
-            sm:w-auto
-          `}
-        >
-          <X
-            className="h-4 w-4"
-            strokeWidth={2}
-          />
-
-          Cancel
-        </button>
-      </div>
-
-      {/* SHARE + NEW ROOM */}
-
-      <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-        <button
-          type="button"
-          onClick={onShare}
-          className={`
-            ${FOCUS_RING}
-            inline-flex
-            min-h-[36px]
-            items-center
-            justify-center
-            gap-1.5
-            rounded-lg
-            px-2
-            text-[12px]
-            font-medium
-            text-slate-500
-            transition-colors
-            hover:text-purple-600
-            dark:text-slate-400
-            dark:hover:text-purple-400
-            sm:justify-start
-          `}
-        >
-          <Share2
-            className="h-3.5 w-3.5"
-            strokeWidth={2}
-          />
-
-          Share room link
-        </button>
-
-        <button
-          type="button"
-          onClick={onNewRoom}
-          className={`
-            ${FOCUS_RING}
-            inline-flex
-            min-h-[36px]
-            items-center
-            justify-center
-            gap-1.5
-            rounded-lg
-            px-2
-            text-[12px]
-            font-medium
-            text-slate-400
-            transition-colors
-            hover:text-purple-600
-            dark:text-slate-500
-            dark:hover:text-purple-400
-            sm:justify-start
-          `}
-        >
-          <RefreshCw
-            className="h-3.5 w-3.5"
-            strokeWidth={2}
-          />
-
-          Generate another
-        </button>
-      </div>
-
-      {/* SECURITY */}
-
-      <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-3.5 py-3 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04] sm:px-4 sm:py-3.5">
-        <ShieldCheck
-          className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
-          strokeWidth={2}
-        />
-
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[11.5px]">
-            Your files stay between devices
-          </p>
-
-          <p className="mt-0.5 text-[10.5px] leading-[17px] text-slate-500 dark:text-slate-400 sm:text-[11px] sm:leading-[18px]">
-            WebDrop uses the server for signaling only. Your files
-            are not uploaded or stored on the server.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   GENERATED QR PANEL
-============================================================ */
-
-function GeneratedQR({ roomCode, joinUrl }) {
-  return (
-    <div>
-      <SectionHeader
-        icon={QrCode}
-        eyebrow="Quick connect"
-        title="Scan to join"
-        description="Use the camera on the receiving device to open this room automatically."
-      />
-
-      {/* QR */}
-
-      <div className="mt-5 flex justify-center sm:mt-6">
-        <div className="rounded-[20px] border border-slate-200 bg-white p-3 dark:border-white/[0.08] sm:rounded-[24px] sm:p-3.5">
-          <QRCodeSVG
-            value={joinUrl}
-            level="M"
-            includeMargin
-            className="
-              h-[160px]
-              w-[160px]
-              min-[380px]:h-[175px]
-              min-[380px]:w-[175px]
-              sm:h-[190px]
-              sm:w-[190px]
-              md:h-[205px]
-              md:w-[205px]
-            "
-          />
-        </div>
-      </div>
-
-      {/* ROOM */}
-
-      <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3 text-center dark:border-white/[0.05] dark:bg-white/[0.025] sm:px-4 sm:py-3.5">
-        <p className="text-[9.5px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 sm:text-[10px]">
-          Room
-        </p>
-
-        <p className="mt-1 font-mono text-[19px] font-bold tracking-[0.14em] text-slate-800 dark:text-slate-200 sm:text-[21px] sm:tracking-[0.2em]">
-          {roomCode}
-        </p>
-
-        <p className="mt-1 text-[10.5px] leading-4 text-slate-400 dark:text-slate-500 sm:text-[11px]">
-          Scan to open the WebDrop join page.
-        </p>
-      </div>
-
-      {/* FEATURES */}
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
-        {ROOM_FEATURES.map(({ icon: Icon, title, text }) => (
-          <div
-            key={title}
-            className="
-              flex
-              items-start
-              gap-2.5
-              rounded-xl
-              border
-              border-slate-100
-              bg-white/70
-              px-3
-              py-2.5
-              dark:border-white/[0.05]
-              dark:bg-white/[0.025]
-              sm:px-3.5
-              sm:py-3
-            "
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 dark:bg-white/[0.05]">
-              <Icon
-                className="h-4 w-4 text-slate-500 dark:text-slate-400"
-                strokeWidth={1.9}
-              />
-            </div>
-
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[11.5px]">
-                {title}
-              </p>
-
-              <p className="mt-0.5 text-[10px] leading-[16px] text-slate-400 dark:text-slate-500 sm:text-[10.5px] sm:leading-[17px]">
-                {text}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ============================================================
-   HOW IT WORKS
-============================================================ */
-
-function HowItWorks() {
-  const steps = [
-    {
-      number: '01',
-      icon: Radio,
-      title: 'Create a room',
-      text: 'Generate a temporary 5-character room code.',
-    },
-    {
-      number: '02',
-      icon: Smartphone,
-      title: 'Share the connection',
-      text: 'Send the code, link, or QR code to the other device.',
-    },
-    {
-      number: '03',
-      icon: ShieldCheck,
-      title: 'Transfer directly',
-      text: 'Once connected, files move peer-to-peer between devices.',
-    },
-  ];
-
-  return (
-    <div>
-      <SectionHeader
-        icon={QrCode}
-        eyebrow="How it works"
-        title="Create and connect"
-        description="No account is required, and your files are never stored on the server."
-      />
-
-      <div className="mt-5 space-y-2.5 sm:mt-6">
-        {steps.map(
-          ({ number, icon: Icon, title, text }) => (
-            <div
-              key={number}
-              className="
-                flex
-                items-start
-                gap-3
-                rounded-xl
-                border
-                border-slate-100
-                bg-slate-50/70
-                px-3
-                py-3
-                dark:border-white/[0.05]
-                dark:bg-white/[0.025]
-                sm:px-3.5
-                sm:py-3.5
-              "
+          {/* Secondary actions */}
+          <div className="mt-4 grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={onShare}
+              className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-white/[0.09] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/[0.08] dark:hover:text-violet-300 ${FOCUS_RING}`}
             >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
-                <Icon
-                  className="h-4 w-4"
-                  strokeWidth={2}
+              <Share2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+              Share link
+            </button>
+
+            <button
+              type="button"
+              onClick={onNewRoom}
+              className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-white/[0.09] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/[0.08] dark:hover:text-violet-300 ${FOCUS_RING}`}
+            >
+              <RefreshCw className="h-3.5 w-3.5" strokeWidth={2.2} />
+              New room
+            </button>
+          </div>
+
+          {/* Extra cancel link only on tablet mid-sizes if needed; primary cancel is beside Enter */}
+          <button
+            type="button"
+            onClick={onCancelRoom}
+            className={`mt-3 hidden items-center gap-1.5 text-[12px] font-medium text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 md:inline-flex lg:hidden ${FOCUS_RING}`}
+          >
+            <X className="h-3 w-3" strokeWidth={2.4} />
+            Cancel this room
+          </button>
+
+          <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-200/70 bg-amber-50/60 p-3 dark:border-amber-500/15 dark:bg-amber-500/[0.06] sm:p-3.5">
+            <AlertCircle
+              className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
+              strokeWidth={2.4}
+            />
+            <p className="text-[11.5px] leading-relaxed text-amber-900/80 dark:text-amber-200/80">
+              <strong className="font-semibold">Keep this tab open.</strong> The
+              room is tied to this session — closing the tab ends the transfer
+              for both devices.
+            </p>
+          </div>
+
+          {/* Mobile-only side cards */}
+          <div className="mt-6 space-y-4 lg:hidden">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-5">
+              <SectionLabel icon={Smartphone}>Scan to join</SectionLabel>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
+                Point your phone&apos;s camera at this QR. It opens the join page
+                instantly.
+              </p>
+              <div className="mt-3 flex justify-center rounded-xl border border-slate-100 bg-white p-3 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-4">
+                <QRCodeSVG
+                  value={joinUrl}
+                  level="M"
+                  size={148}
+                  includeMargin={false}
+                  className="h-auto w-full max-w-[148px] sm:max-w-[176px]"
                 />
               </div>
+              <div className="mt-3 flex items-center justify-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+                <Download className="h-3 w-3" strokeWidth={2.4} />
+                Works with any scanner app
+              </div>
+            </div>
 
-              <div className="min-w-0">
-                <p className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 sm:text-[12.5px]">
-                  <span className="mr-1.5 font-mono text-[9px] text-slate-300 dark:text-slate-600 sm:text-[10px]">
-                    {number}
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-5">
+              <SectionLabel icon={Users}>What receiver does</SectionLabel>
+              <ol className="mt-3 space-y-2.5">
+                {[
+                  'Opens WebDrop',
+                  'Clicks "Join room"',
+                  'Enters this code',
+                  'Selects files to send back',
+                ].map((step, i) => (
+                  <li key={step} className="flex items-center gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-mono text-[10px] font-bold text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
+                      {i + 1}
+                    </span>
+                    <span className="text-[12px] text-slate-600 dark:text-slate-300">
+                      {step}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 to-emerald-50/40 p-4 dark:border-emerald-500/15 dark:from-emerald-500/[0.08] dark:to-emerald-500/[0.03]">
+              <div className="flex items-start gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm dark:bg-white/[0.06] dark:text-emerald-400">
+                  <ShieldCheck className="h-4 w-4" strokeWidth={2.4} />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[12.5px] font-bold text-emerald-900 dark:text-emerald-200">
+                    Encrypted end-to-end
+                  </p>
+                  <p className="mt-1 text-[11.5px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+                    Your files are transferred over an encrypted DTLS channel.
+                    Nothing is readable by our servers.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ============ RIGHT COLUMN (desktop) ============ */}
+        <aside className="hidden min-w-0 space-y-4 lg:sticky lg:top-24 lg:block lg:self-start">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
+            <SectionLabel icon={Smartphone}>Scan to join</SectionLabel>
+            <p className="mt-3 text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
+              Point your phone&apos;s camera at this QR. It opens the join page
+              instantly.
+            </p>
+            <div className="mt-4 flex justify-center rounded-xl border border-slate-100 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02]">
+              <QRCodeSVG value={joinUrl} level="M" size={176} includeMargin={false} />
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
+              <Download className="h-3 w-3" strokeWidth={2.4} />
+              Works with any scanner app
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
+            <SectionLabel icon={Users}>What receiver does</SectionLabel>
+            <ol className="mt-4 space-y-3">
+              {[
+                'Opens WebDrop',
+                'Clicks "Join room"',
+                'Enters this code',
+                'Selects files to send back',
+              ].map((step, i) => (
+                <li key={step} className="flex items-center gap-3">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-mono text-[10px] font-bold text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
+                    {i + 1}
                   </span>
+                  <span className="text-[12px] text-slate-600 dark:text-slate-300">
+                    {step}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
 
-                  {title}
+          <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 to-emerald-50/40 p-5 dark:border-emerald-500/15 dark:from-emerald-500/[0.08] dark:to-emerald-500/[0.03]">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm dark:bg-white/[0.06] dark:text-emerald-400">
+                <ShieldCheck className="h-4 w-4" strokeWidth={2.4} />
+              </span>
+              <div>
+                <p className="text-[12.5px] font-bold text-emerald-900 dark:text-emerald-200">
+                  Encrypted end-to-end
                 </p>
-
-                <p className="mt-0.5 text-[10.5px] leading-[17px] text-slate-400 dark:text-slate-500 sm:text-[11px] sm:leading-[18px]">
-                  {text}
+                <p className="mt-1 text-[11.5px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+                  Your files are transferred over an encrypted DTLS channel.
+                  Nothing is readable by our servers.
                 </p>
               </div>
             </div>
-          )
-        )}
-      </div>
-
-      {/* DETAILS */}
-
-      <div className="mt-3 grid grid-cols-1 gap-2.5 min-[400px]:grid-cols-2">
-        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-white/[0.05] dark:bg-white/[0.025] sm:p-3.5">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500 sm:text-[10px]">
-            Room lifetime
-          </p>
-
-          <div className="mt-2 flex items-center gap-1.5">
-            <Clock3
-              className="h-4 w-4 text-slate-500 dark:text-slate-400"
-              strokeWidth={1.9}
-            />
-
-            <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[12px]">
-              30 minutes
-            </p>
           </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-3 dark:border-white/[0.05] dark:bg-white/[0.025] sm:p-3.5">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500 sm:text-[10px]">
-            Devices
-          </p>
-
-          <div className="mt-2 flex items-center gap-1.5">
-            <Users
-              className="h-4 w-4 text-slate-500 dark:text-slate-400"
-              strokeWidth={1.9}
-            />
-
-            <p className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[12px]">
-              2 maximum
-            </p>
-          </div>
-        </div>
+        </aside>
       </div>
-
-      {/* PRIVACY */}
-
-      <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-emerald-100 bg-emerald-50/55 px-3.5 py-3 dark:border-emerald-500/10 dark:bg-emerald-500/[0.04] sm:px-4 sm:py-3.5">
-        <ShieldCheck
-          className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500"
-          strokeWidth={2}
-        />
-
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-200 sm:text-[11.5px]">
-            Privacy by design
-          </p>
-
-          <p className="mt-0.5 text-[10px] leading-[16px] text-slate-400 dark:text-slate-500 sm:text-[10.5px] sm:leading-[17px]">
-            The signaling server helps devices find each other but
-            does not receive or store your files.
-          </p>
-        </div>
-      </div>
-    </div>
+    </>
   );
 }
 
@@ -969,17 +850,11 @@ export default function CreateRoomPage() {
   const [roomCode, setRoomCode] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const [deviceName] = useState(() => {
-    try {
-      return getDeviceInfo();
-    } catch {
-      return 'Web browser';
-    }
-  });
-
+  const [deviceName] = useState(() => getDeviceInfo());
   const [deviceInfo] = useState(() => getDeviceInfo());
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   const {
     socket,
@@ -989,55 +864,39 @@ export default function CreateRoomPage() {
     setUsers,
   } = useRoom();
 
-  /* ============================================================
-     JOIN URL
-  ============================================================ */
+  /* Scroll top on route change */
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [location.pathname]);
 
+  /* Join URL */
   const joinUrl = useMemo(() => {
     if (!roomCode) return '';
-
-    return `${WEB_APP_URL}/join?room=${encodeURIComponent(
-      roomCode
-    )}`;
+    return `${WEB_APP_URL}/join?room=${encodeURIComponent(roomCode)}`;
   }, [roomCode]);
 
-  /* ============================================================
-     ROOM CREATED EVENT
-  ============================================================ */
-
+  /* Room created event */
   useEffect(() => {
     if (!socket) return;
 
-    const handleRoomCreated = ({
-      roomCode: code,
-      hostToken,
-    }) => {
+    const handleRoomCreated = ({ roomCode: code, hostToken }) => {
       if (!code) {
         setLoading(false);
-
         toast.error(
           'Room creation failed',
           'The server did not return a room code.'
         );
-
         return;
       }
 
       window.setTimeout(() => {
         setLoading(false);
-
         setRoomCode(code);
         setLocalRoomCode(code);
         setRole('host');
         setUsers([]);
 
-        /*
-         * The host room is only joined when the user opens
-         * the actual transfer room.
-         */
-        socket.emit('leave-room', {
-          roomCode: code,
-        });
+        socket.emit('leave-room', { roomCode: code });
 
         if (hostToken) {
           saveHostToken(code, hostToken);
@@ -1045,363 +904,174 @@ export default function CreateRoomPage() {
 
         addRecentRoom(code, 'host');
 
-        toast.success(
-          'Room created',
-          `Room ${code} is ready.`
-        );
+        toast.success('Room created', `Room ${code} is ready.`);
+
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
       }, 300);
     };
 
     socket.on('room-created', handleRoomCreated);
+    return () => socket.off('room-created', handleRoomCreated);
+  }, [socket, setLocalRoomCode, setRole, setUsers]);
 
-    return () => {
-      socket.off('room-created', handleRoomCreated);
-    };
-  }, [
-    socket,
-    setLocalRoomCode,
-    setRole,
-    setUsers,
-  ]);
-
-  /* ============================================================
-     GENERATE ROOM
-  ============================================================ */
-
+  /* Generate */
   const handleGenerate = () => {
     if (!socket || !connected || !socket.connected) {
       toast.error(
         'Server not connected',
         'Please wait for the WebDrop server connection.'
       );
-
       return;
     }
 
     if (loading) return;
 
     setLoading(true);
-
-    socket.emit('create-room', {
-      deviceName,
-      deviceInfo,
-    });
+    socket.emit('create-room', { deviceName, deviceInfo });
 
     window.setTimeout(() => {
       setLoading((current) => {
         if (!current) return current;
-
-        toast.error(
-          'No response',
-          'The backend did not respond in time.'
-        );
-
+        toast.error('No response', 'The backend did not respond in time.');
         return false;
       });
     }, 8000);
   };
 
-  /* ============================================================
-     OPEN TRANSFER ROOM
-  ============================================================ */
-
   const handleOpenTransmission = () => {
     if (!roomCode) return;
-
     navigate(`/room/${roomCode}`);
   };
 
-  /* ============================================================
-     OPEN JOIN LINK
-  ============================================================ */
-
   const handleOpenJoinLink = () => {
     if (!joinUrl) return;
-
-    window.open(
-      joinUrl,
-      '_blank',
-      'noopener,noreferrer'
-    );
+    window.open(joinUrl, '_blank', 'noopener,noreferrer');
   };
 
   /* ============================================================
-     SHARE
+     SHARE — Uses device's native share sheet
+     
+     Priority:
+     1. navigator.share (device native share sheet — WhatsApp, Telegram, etc.)
+     2. Clipboard copy fallback (desktop browsers without native share)
+     3. Prompt last resort
   ============================================================ */
-
   const handleShare = async () => {
-    if (!joinUrl) return;
+    if (!joinUrl || !roomCode) {
+      toast.error('Nothing to share', 'Please wait for the room code.');
+      return;
+    }
 
+    const shareText = `Join my WebDrop room using code ${roomCode}. Room link: ${joinUrl}`;
+
+    const shareData = {
+      title: 'Join my WebDrop room',
+      text: shareText,
+      url: joinUrl,
+    };
+
+    // 1. Native share sheet (mobile + modern desktop browsers)
+    if (
+      typeof navigator !== 'undefined' &&
+      typeof navigator.share === 'function'
+    ) {
+      try {
+        if (
+          typeof navigator.canShare === 'function' &&
+          !navigator.canShare(shareData)
+        ) {
+          // Fall through to clipboard
+        } else {
+          await navigator.share(shareData);
+          return;
+        }
+      } catch (error) {
+        if (error?.name === 'AbortError') return;
+        // Fall through to clipboard.
+      }
+    }
+
+    // 2. Clipboard fallback (desktop without native share)
+    const ok = await copyToClipboard(joinUrl);
+
+    if (ok) {
+      toast.success(
+        'Link copied',
+        'Native share not available here — the room link has been copied to your clipboard.'
+      );
+      return;
+    }
+
+    // 3. Last resort — prompt
     try {
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Join my WebDrop room',
-          text: `Join my WebDrop room using code ${roomCode}.`,
-          url: joinUrl,
-        });
-
-        return;
-      }
-
-      if (
-        navigator.clipboard &&
-        window.isSecureContext
-      ) {
-        await navigator.clipboard.writeText(joinUrl);
-
-        toast.success(
-          'Link copied',
-          'Room link copied to clipboard.'
-        );
-
-        return;
-      }
-
-      toast.info(
-        'Share link',
-        'Copy the room link manually.'
-      );
-    } catch (error) {
-      if (error?.name === 'AbortError') {
-        return;
-      }
-
-      console.error('Share failed:', error);
-
-      toast.error(
-        'Unable to share',
-        'Please copy the room link manually.'
-      );
+      window.prompt('Copy this room link:', joinUrl);
+    } catch {
+      toast.error('Unable to share', 'Please copy the room link manually.');
     }
   };
-
-  /* ============================================================
-     CANCEL ROOM
-  ============================================================ */
 
   const handleCancelRoom = () => {
     if (!roomCode) return;
-
-    if (socket) {
-      socket.emit('cancel-room', {
-        roomCode,
-      });
-    }
-
+    if (socket) socket.emit('cancel-room', { roomCode });
     clearHostToken(roomCode);
-
     setRoomCode(null);
     setLocalRoomCode(null);
     setRole(null);
     setUsers([]);
-
-    toast.success(
-      'Room cancelled',
-      'The transfer room has been closed.'
-    );
+    toast.success('Room cancelled', 'The transfer room has been closed.');
   };
-
-  /* ============================================================
-     NEW ROOM
-  ============================================================ */
 
   const handleNewRoom = () => {
-    if (roomCode) {
-      clearHostToken(roomCode);
-    }
-
+    if (roomCode) clearHostToken(roomCode);
     setRoomCode(null);
     setLocalRoomCode(null);
     setRole(null);
     setUsers([]);
   };
 
-  /* ============================================================
-     RENDER
-  ============================================================ */
-
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[#FBFAFF] text-slate-900 transition-colors dark:bg-surface dark:text-white">
-      {/* ======================================================
-          BACKGROUND
-      ====================================================== */}
+    <div className="relative min-h-screen overflow-x-hidden bg-[#FBFAFF] text-slate-900 dark:bg-surface dark:text-white">
+      {/* Subtle top accent */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
 
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute right-[-180px] top-[-180px] h-[420px] w-[420px] rounded-full bg-purple-500/[0.065] blur-3xl dark:bg-purple-500/[0.075]" />
+      <main className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-6 sm:px-6 sm:pb-20 sm:pt-12 lg:px-10">
+        {/* Top nav */}
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className={`group inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[12px] font-medium text-slate-500 transition-colors hover:text-violet-600 dark:text-slate-400 dark:hover:text-violet-400 ${FOCUS_RING}`}
+        >
+          <ArrowLeft
+            className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
+            strokeWidth={2.4}
+          />
+          Back to home
+        </button>
 
-        <div className="absolute left-[-170px] top-[360px] h-[360px] w-[360px] rounded-full bg-indigo-500/[0.045] blur-3xl dark:bg-indigo-500/[0.055]" />
-
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/20 to-transparent" />
-      </div>
-
-      <main className="relative mx-auto w-full max-w-[1280px] px-3.5 pb-8 pt-5 min-[400px]:px-4 sm:px-6 sm:pb-10 sm:pt-8 lg:px-8">
-        <section className="mx-auto max-w-[1120px]">
-          {/* ==================================================
-              TOP INTRO
-          ================================================== */}
-
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 max-w-[720px]">
-              {/* EYEBROW */}
-
-              <div className="inline-flex items-center gap-2 rounded-full border border-purple-200/80 bg-purple-50/80 px-3 py-1.5 dark:border-purple-500/20 dark:bg-purple-500/[0.08] sm:px-3.5">
-                <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-
-                <span className="text-[11px] font-semibold text-purple-600 dark:text-purple-400 sm:text-[12px]">
-                  Send files
-                </span>
-              </div>
-
-              {/* TITLE */}
-
-              <h1 className="mt-3 font-heading text-[30px] font-extrabold leading-[1.06] tracking-[-0.045em] text-slate-900 dark:text-white min-[380px]:text-[33px] sm:mt-3.5 sm:text-[44px] lg:text-[50px]">
-                Create a private
-                <span className="block text-purple-600 dark:text-purple-400">
-                  transfer room.
-                </span>
-              </h1>
-
-              {/* DESCRIPTION */}
-
-              <p className="mt-3.5 max-w-[650px] text-[13px] leading-5 text-slate-500 dark:text-slate-400 min-[380px]:text-[13.5px] sm:mt-4 sm:text-[15px] sm:leading-7">
-                Generate a temporary room code and share it with
-                another device to connect directly. No account and
-                no upload to a server.
-              </p>
-            </div>
-
-            {/* CONNECTION BADGE */}
-
-            <div className="hidden shrink-0 sm:block">
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 px-4 py-3.5 shadow-[0_4px_18px_rgba(15,23,42,0.03)] backdrop-blur-sm dark:border-white/[0.06] dark:bg-white/[0.025]">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-500/10">
-                  <ShieldCheck
-                    className="h-5 w-5 text-purple-600 dark:text-purple-400"
-                    strokeWidth={2}
-                  />
-                </div>
-
-                <div>
-                  <p className="text-[10.5px] font-medium text-slate-400 dark:text-slate-500">
-                    Connection
-                  </p>
-
-                  <p className="mt-0.5 text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                    Peer-to-peer transfer
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ==================================================
-              MOBILE CONNECTION INFO
-          ================================================== */}
-
-          <div className="mt-4 sm:hidden">
-            <div className="flex items-center gap-2.5 rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2.5 dark:border-white/[0.06] dark:bg-white/[0.025]">
-              <ShieldCheck
-                className="h-4 w-4 shrink-0 text-purple-600 dark:text-purple-400"
-                strokeWidth={2}
-              />
-
-              <div className="min-w-0">
-                <p className="text-[9.5px] font-medium text-slate-400 dark:text-slate-500">
-                  Connection
-                </p>
-
-                <p className="truncate text-[11.5px] font-semibold text-slate-700 dark:text-slate-200">
-                  Peer-to-peer transfer
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* ==================================================
-              MAIN GRID
-          ================================================== */}
-
-          <div className="mt-5 grid gap-4 sm:mt-7 sm:gap-5 lg:grid-cols-[1.28fr_0.92fr] lg:items-start">
-            {/* =================================================
-                LEFT
-            ================================================= */}
-
-            <div className="min-w-0 overflow-hidden rounded-[22px] border border-slate-200/80 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.025)] dark:border-white/[0.06] dark:bg-surface-card dark:shadow-none sm:rounded-[26px]">
-              <div className="p-4 min-[400px]:p-5 sm:p-7">
-                {!roomCode ? (
-                  <CreateRoomContent
-                    loading={loading}
-                    connected={connected}
-                    socket={socket}
-                    onGenerate={handleGenerate}
-                  />
-                ) : (
-                  <GeneratedRoomContent
-                    roomCode={roomCode}
-                    joinUrl={joinUrl}
-                    onOpenRoom={handleOpenTransmission}
-                    onOpenJoinLink={handleOpenJoinLink}
-                    onShare={handleShare}
-                    onNewRoom={handleNewRoom}
-                    onCancelRoom={handleCancelRoom}
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* =================================================
-                RIGHT
-            ================================================= */}
-
-            <aside className="min-w-0 rounded-[22px] border border-slate-200/80 bg-white p-4 shadow-[0_8px_30px_rgba(15,23,42,0.025)] dark:border-white/[0.06] dark:bg-surface-card dark:shadow-none min-[400px]:p-5 sm:rounded-[26px] sm:p-6">
-              {roomCode ? (
-                <GeneratedQR
-                  roomCode={roomCode}
-                  joinUrl={joinUrl}
-                />
-              ) : (
-                <HowItWorks />
-              )}
-            </aside>
-          </div>
-
-          {/* ==================================================
-              BOTTOM NAV
-          ================================================== */}
-
-          <div className="mt-5 border-t border-slate-200/70 pt-4 dark:border-white/[0.06] sm:mt-6 sm:pt-5">
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className={`
-                ${FOCUS_RING}
-                group
-                inline-flex
-                min-h-[36px]
-                items-center
-                gap-2
-                rounded-lg
-                px-2
-                text-[12px]
-                font-medium
-                text-slate-500
-                transition-colors
-                hover:text-slate-900
-                dark:text-slate-400
-                dark:hover:text-white
-                sm:text-[13px]
-              `}
-            >
-              <ArrowLeft
-                className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5"
-                strokeWidth={2}
-              />
-
-              Back to overview
-            </button>
-          </div>
+        {/* Main content */}
+        <section className="mt-6 sm:mt-12">
+          {!roomCode ? (
+            <CreateView
+              loading={loading}
+              connected={connected}
+              socket={socket}
+              onGenerate={handleGenerate}
+            />
+          ) : (
+            <ReadyView
+              roomCode={roomCode}
+              joinUrl={joinUrl}
+              onOpenRoom={handleOpenTransmission}
+              onOpenJoinLink={handleOpenJoinLink}
+              onShare={handleShare}
+              onNewRoom={handleNewRoom}
+              onCancelRoom={handleCancelRoom}
+            />
+          )}
         </section>
       </main>
+
+      <ScrollToTop />
     </div>
   );
 }

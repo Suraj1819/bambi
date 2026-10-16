@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Radio,
   ArrowRight,
+  ArrowUp,
   Wifi,
   WifiOff,
   Smartphone,
@@ -31,6 +32,12 @@ import {
   Briefcase,
   GraduationCap,
   Users,
+  Sparkles,
+  Star,
+  Clock,
+  TrendingUp,
+  Award,
+  CircleDot,
 } from 'lucide-react';
 
 import { normalizeRoomCode } from '../utils/generateRoomCode';
@@ -45,14 +52,10 @@ const GRID_BG =
   'linear-gradient(rgba(124,58,237,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(124,58,237,0.08) 1px, transparent 1px)';
 
 const FOCUS_RING =
-  'focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/25';
+  'focus:outline-none focus-visible:ring-4 focus-visible:ring-violet-500/25';
 
 /* =========================================================
    APP DOWNLOADS
-
-   When a new version is released:
-   1. Add the new version at the TOP of `versions`.
-   2. Keep older versions below it.
 ========================================================= */
 
 const APP_DOWNLOADS = [
@@ -95,10 +98,10 @@ const APP_DOWNLOADS = [
 ========================================================= */
 
 const METRICS = [
-  { value: '0 MB', label: 'Stored on our servers' },
-  { value: 'No limit', label: 'File size set by WebDrop' },
-  { value: '2 devices', label: 'Per private room' },
-  { value: '30 min', label: 'Room lifetime' },
+  { value: '0 MB', label: 'Stored on our servers', icon: ShieldCheck },
+  { value: 'No limit', label: 'File size set by WebDrop', icon: TrendingUp },
+  { value: '2 devices', label: 'Per private room', icon: Users },
+  { value: '30 min', label: 'Room lifetime', icon: Clock },
 ];
 
 const STEPS = [
@@ -115,7 +118,7 @@ const STEPS = [
   {
     icon: Send,
     title: 'Send files directly',
-    text: 'Pick files or a folder. They travel straight from one browser to the other, and you see live speed and time left.',
+    text: 'Pick files or a folder. They travel straight from one browser to the other, with live speed and ETA.',
   },
 ];
 
@@ -143,31 +146,11 @@ const USE_CASES = [
 ];
 
 const COMPARISON = [
-  {
-    topic: 'Where your file goes',
-    cloud: 'Uploaded to a company server first',
-    webdrop: 'Straight to the other device',
-  },
-  {
-    topic: 'Waiting time',
-    cloud: 'Upload, then download',
-    webdrop: 'One direct transfer',
-  },
-  {
-    topic: 'Account needed',
-    cloud: 'Usually yes',
-    webdrop: 'Never',
-  },
-  {
-    topic: 'File size',
-    cloud: 'Often capped by plan or storage',
-    webdrop: 'No limit set by WebDrop',
-  },
-  {
-    topic: 'Copy left behind',
-    cloud: 'Stays on the server until deleted',
-    webdrop: 'None, rooms expire in 30 minutes',
-  },
+  { topic: 'Where your file goes', cloud: 'Uploaded to a company server first', webdrop: 'Straight to the other device' },
+  { topic: 'Waiting time', cloud: 'Upload, then download', webdrop: 'One direct transfer' },
+  { topic: 'Account needed', cloud: 'Usually yes', webdrop: 'Never' },
+  { topic: 'File size', cloud: 'Often capped by plan or storage', webdrop: 'No limit set by WebDrop' },
+  { topic: 'Copy left behind', cloud: 'Stays on the server until deleted', webdrop: 'None, rooms expire in 30 minutes' },
 ];
 
 const SERVER_SEES = [
@@ -220,8 +203,6 @@ function detectPlatform() {
   return null;
 }
 
-/* Starts a download without leaving or reloading the page,
-   and without opening a new tab. */
 function startDownload(url) {
   const a = document.createElement('a');
   a.href = url;
@@ -234,19 +215,47 @@ function startDownload(url) {
 }
 
 /* =========================================================
+   SCROLL TO TOP
+========================================================= */
+
+function ScrollToTop() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 400);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      aria-label="Scroll to top"
+      className={`fixed bottom-5 right-5 z-40 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-600 shadow-lg backdrop-blur-sm transition-colors duration-200 hover:border-violet-300 hover:text-violet-600 dark:border-white/[0.1] dark:bg-[#15171d]/95 dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300 ${FOCUS_RING}`}
+    >
+      <ArrowUp className="h-4 w-4" strokeWidth={2.4} />
+    </button>
+  );
+}
+
+/* =========================================================
    PAGE
 ========================================================= */
 
 export default function Home() {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, []);
+
   const [creating, setCreating] = useState(false);
   const [code, setCode] = useState('');
 
   const navigate = useNavigate();
-
-  /* Real-time signaling server status */
   const { connected } = useRoom();
-
-  /* Live connection type + signal bars */
   const net = useNetworkInfo();
 
   const currentPlatform = useMemo(detectPlatform, []);
@@ -258,7 +267,6 @@ export default function Home() {
 
   const handleJoin = (e) => {
     e.preventDefault();
-
     if (code.length === 5) {
       navigate(`/join?room=${code}`);
     }
@@ -267,10 +275,12 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#FBFAFF] transition-colors dark:bg-surface">
       <main className="mx-auto w-full max-w-[1400px] px-4 py-8 sm:px-6 sm:py-10 lg:px-10 lg:py-12">
+        {/* ============ HERO GRID ============ */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.45fr_1fr]">
           {/* ================= HERO ================= */}
-          <section className="relative min-h-[560px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-7 dark:border-surface-border dark:bg-surface-card sm:p-10 lg:p-12">
-            <div className="pointer-events-none absolute -right-32 -top-32 h-[420px] w-[420px] rounded-full bg-purple-200/50 blur-3xl dark:bg-purple-500/10" />
+          <section className="relative min-h-[560px] overflow-hidden rounded-[28px] border border-slate-200 bg-white p-7 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-10 lg:p-12">
+            {/* Background accents */}
+            <div className="pointer-events-none absolute -right-32 -top-32 h-[420px] w-[420px] rounded-full bg-violet-200/50 blur-3xl dark:bg-violet-500/10" />
             <div className="pointer-events-none absolute -bottom-40 -left-40 h-[380px] w-[380px] rounded-full bg-indigo-100/40 blur-3xl dark:bg-indigo-500/5" />
             <div
               className="pointer-events-none absolute inset-0 opacity-[0.025] dark:opacity-[0.04]"
@@ -312,7 +322,7 @@ export default function Home() {
                 )}
 
                 <span
-                  className={`text-[12px] font-semibold ${
+                  className={`text-[11px] font-semibold ${
                     connected
                       ? 'text-emerald-700 dark:text-emerald-400'
                       : 'text-red-700 dark:text-red-400'
@@ -322,32 +332,50 @@ export default function Home() {
                 </span>
               </div>
 
-              {/* Heading */}
-              <h1 className="mt-8 max-w-[800px] font-heading text-[44px] font-extrabold leading-[0.92] tracking-[-0.04em] text-slate-900 dark:text-white sm:text-[60px] lg:text-[72px] xl:text-[82px]">
+              {/* Trust strip */}
+              <div className="mt-5 flex flex-wrap items-center gap-4 text-[10.5px] font-medium text-slate-400 dark:text-slate-500">
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star
+                      key={i}
+                      className="h-3 w-3 fill-amber-400 text-amber-400"
+                      strokeWidth={0}
+                    />
+                  ))}
+                  <span className="ml-1.5">No sign-up required</span>
+                </div>
+                <span className="hidden h-3 w-px bg-slate-200 dark:bg-white/[0.07] sm:block" />
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="h-3 w-3 text-emerald-500" strokeWidth={2.4} />
+                  End-to-end encrypted
+                </div>
+              </div>
+
+              {/* Heading — smaller, matches CreateRoom */}
+              <h1 className="mt-5 max-w-[600px] font-heading text-[30px] font-extrabold leading-[1.05] tracking-[-0.04em] text-slate-900 dark:text-white sm:text-[38px] lg:text-[44px]">
                 Drop.
-                <br />
-                <span className="bg-gradient-to-r from-purple-600 via-violet-600 to-indigo-600 bg-clip-text text-transparent">
+                <span className="ml-2 bg-gradient-to-r from-violet-600 via-violet-500 to-indigo-600 bg-clip-text text-transparent">
                   Connect.
                 </span>
                 <br />
                 Transfer.
               </h1>
 
-              <p className="mt-8 max-w-[620px] text-[15px] leading-7 text-slate-500 dark:text-slate-400 sm:text-[17px]">
-                Send files of any size directly between devices, right from your
-                browser. WebDrop connects the two devices with WebRTC, so your
-                files never pass through or sit on our servers.
+              <p className="mt-5 max-w-[520px] text-[13.5px] leading-6 text-slate-600 dark:text-slate-400 sm:text-[15px] sm:leading-7">
+                Send files of any size directly between devices, right from
+                your browser. WebDrop connects the two devices with WebRTC, so
+                your files never pass through or sit on our servers.
               </p>
 
               {/* Actions */}
-              <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              <div className="mt-7 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
                   onClick={handleCreateRoom}
                   disabled={creating}
-                  className="group inline-flex items-center justify-center gap-2.5 rounded-xl bg-purple-600 px-6 py-3.5 text-[14px] font-semibold text-white shadow-[0_12px_30px_rgba(124,58,237,0.22)] transition-all duration-200 hover:-translate-y-0.5 hover:bg-purple-700 hover:shadow-[0_16px_35px_rgba(124,58,237,0.3)] focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/30 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={`group inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-[13px] font-semibold text-white shadow-lg shadow-violet-600/20 transition-colors duration-200 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
-                  <Radio className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                  <Radio className="h-4 w-4" strokeWidth={2.2} />
                   {creating ? 'Creating…' : 'Create secure room'}
                   <ArrowRight
                     className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
@@ -358,7 +386,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => navigate('/join')}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-6 py-3.5 text-[14px] font-semibold text-slate-700 transition-all hover:-translate-y-0.5 hover:bg-slate-50 focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/20 dark:border-surface-border dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.06]"
+                  className={`inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[13px] font-semibold text-slate-700 transition-colors duration-200 hover:border-violet-200 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.06] sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
                   <Cable className="h-4 w-4" strokeWidth={2.2} />
                   Join with a code
@@ -368,26 +396,26 @@ export default function Home() {
               </div>
 
               {/* Technology strip */}
-              <div className="mt-12 grid max-w-[600px] grid-cols-3 border-y border-slate-100 py-5 dark:border-white/[0.06]">
-                <TechItem icon={Cable} color="text-purple-500" label="Protocol" value="WebRTC" />
+              <div className="mt-10 grid max-w-[520px] grid-cols-3 border-y border-slate-100 py-4 dark:border-white/[0.06]">
+                <TechItem icon={Cable} color="text-violet-500" label="Protocol" value="WebRTC" />
                 <TechItem
                   icon={Lock}
                   color="text-emerald-500"
                   label="Encryption"
                   value="DTLS"
-                  className="border-x border-slate-100 px-4 dark:border-white/[0.06]"
+                  className="border-x border-slate-100 px-3 dark:border-white/[0.06]"
                 />
                 <TechItem
                   icon={Globe}
                   color="text-indigo-500"
                   label="Server storage"
                   value="0 MB"
-                  className="pl-4"
+                  className="pl-3"
                 />
               </div>
 
-              <div className="mt-6 flex items-center gap-2 text-[12px] text-slate-400 dark:text-slate-500">
-                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              <div className="mt-5 flex items-center gap-2 text-[11.5px] text-slate-400 dark:text-slate-500">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
                 Files are transferred directly between connected peers.
               </div>
             </div>
@@ -395,14 +423,15 @@ export default function Home() {
 
           {/* ================= RIGHT COLUMN ================= */}
           <div className="flex flex-col gap-5">
-            {/* -------- PEER RADAR -------- */}
-            <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 dark:border-surface-border dark:bg-surface-card sm:p-7">
+            {/* -------- PEER RADAR (ORIGINAL) -------- */}
+            <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-[12px] font-semibold text-purple-600 dark:text-purple-400">
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+                    <CircleDot className="h-3 w-3" strokeWidth={2.6} />
                     Live topology
                   </p>
-                  <h2 className="mt-1 font-heading text-[24px] font-bold tracking-tight text-slate-900 dark:text-white">
+                  <h2 className="mt-1 font-heading text-[18px] font-bold tracking-tight text-slate-900 dark:text-white">
                     Peer radar
                   </h2>
                 </div>
@@ -430,7 +459,7 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Radar area */}
+              {/* Radar area — ORIGINAL with all animations */}
               <div className="relative mt-5 h-[275px] overflow-hidden rounded-2xl border border-slate-100 bg-[#FAF9FF] dark:border-white/[0.06] dark:bg-[#101018]">
                 <div
                   className="absolute inset-0 opacity-50 dark:opacity-[0.18]"
@@ -438,16 +467,15 @@ export default function Home() {
                 />
 
                 {!connected ? (
-                  /* SEARCHING STATE */
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
                     <div className="relative z-10 flex h-[150px] w-[150px] items-center justify-center">
-                      <div className="absolute inset-0 rounded-full border border-purple-300/30 dark:border-purple-400/10" />
+                      <div className="absolute inset-0 rounded-full border border-violet-300/30 dark:border-violet-400/10" />
                       <div
-                        className="absolute inset-[18px] rounded-full border border-purple-300/40 dark:border-purple-400/15"
+                        className="absolute inset-[18px] rounded-full border border-violet-300/40 dark:border-violet-400/15"
                         style={{ animation: 'searchPulse 2s ease-out infinite' }}
                       />
                       <div
-                        className="absolute inset-[38px] rounded-full border border-purple-300/50 dark:border-purple-400/20"
+                        className="absolute inset-[38px] rounded-full border border-violet-300/50 dark:border-violet-400/20"
                         style={{ animation: 'searchPulse 2s ease-out 0.5s infinite' }}
                       />
                       <div
@@ -459,14 +487,14 @@ export default function Home() {
                         }}
                       />
 
-                      <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-purple-200 bg-white shadow-[0_8px_25px_rgba(124,58,237,0.15)] dark:border-purple-400/20 dark:bg-slate-900">
-                        <WifiOff className="h-5 w-5 animate-pulse text-purple-500" strokeWidth={2} />
+                      <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-200 bg-white shadow-[0_8px_25px_rgba(124,58,237,0.15)] dark:border-violet-400/20 dark:bg-slate-900">
+                        <WifiOff className="h-5 w-5 animate-pulse text-violet-500" strokeWidth={2} />
                         <span className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-white bg-amber-400 dark:border-slate-900">
                           <span className="h-1 w-1 rounded-full bg-white" />
                         </span>
                       </div>
 
-                      <span className="absolute left-[10px] top-[42px] h-1.5 w-1.5 animate-ping rounded-full bg-purple-400" />
+                      <span className="absolute left-[10px] top-[42px] h-1.5 w-1.5 animate-ping rounded-full bg-violet-400" />
                       <span
                         className="absolute right-[14px] top-[82px] h-1.5 w-1.5 animate-ping rounded-full bg-indigo-400"
                         style={{ animationDelay: '400ms' }}
@@ -480,7 +508,7 @@ export default function Home() {
                     <div className="relative z-10 mt-2 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-400" />
-                        <p className="text-[12px] font-semibold text-purple-500">
+                        <p className="text-[12px] font-semibold text-violet-500">
                           Searching for signal
                         </p>
                       </div>
@@ -493,19 +521,18 @@ export default function Home() {
                       {[0, 120, 240].map((d) => (
                         <span
                           key={d}
-                          className="h-1 w-1 animate-bounce rounded-full bg-purple-400"
+                          className="h-1 w-1 animate-bounce rounded-full bg-violet-400"
                           style={{ animationDelay: `${d}ms` }}
                         />
                       ))}
                     </div>
                   </div>
                 ) : (
-                  /* CONNECTED STATE */
                   <div className="absolute inset-0">
                     <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="absolute h-[210px] w-[210px] rounded-full border border-purple-200/50 dark:border-purple-400/10" />
-                      <div className="absolute h-[156px] w-[156px] rounded-full border border-purple-200/60 dark:border-purple-400/15" />
-                      <div className="absolute h-[96px] w-[96px] rounded-full border border-purple-200/70 dark:border-purple-400/20" />
+                      <div className="absolute h-[210px] w-[210px] rounded-full border border-violet-200/50 dark:border-violet-400/10" />
+                      <div className="absolute h-[156px] w-[156px] rounded-full border border-violet-200/60 dark:border-violet-400/15" />
+                      <div className="absolute h-[96px] w-[96px] rounded-full border border-violet-200/70 dark:border-violet-400/20" />
                       <div
                         className="absolute h-[210px] w-[210px] rounded-full"
                         style={{
@@ -530,19 +557,19 @@ export default function Home() {
                     <span className="packet packet-right" />
 
                     <div className="animate-peer-center absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2">
-                      <div className="absolute -inset-8 rounded-full border border-purple-400/10" />
+                      <div className="absolute -inset-8 rounded-full border border-violet-400/10" />
                       <div
-                        className="absolute -inset-12 rounded-full border border-purple-400/10"
+                        className="absolute -inset-12 rounded-full border border-violet-400/10"
                         style={{ animation: 'networkPulse 2.5s ease-out infinite' }}
                       />
-                      <div className="relative flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-[0_10px_30px_rgba(124,58,237,0.35)]">
+                      <div className="relative flex h-[58px] w-[58px] items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-[0_10px_30px_rgba(124,58,237,0.35)]">
                         <Server className="h-7 w-7 text-white" strokeWidth={2} />
                         <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-white bg-emerald-500 dark:border-[#101018]">
                           <span className="h-1.5 w-1.5 rounded-full bg-white" />
                         </span>
                       </div>
-                      <div className="absolute left-1/2 top-[68px] -translate-x-1/2 whitespace-nowrap rounded-full border border-purple-200/70 bg-white/90 px-2.5 py-1 backdrop-blur dark:border-purple-400/10 dark:bg-slate-900/80">
-                        <span className="text-[10px] font-semibold text-purple-600 dark:text-purple-400">
+                      <div className="absolute left-1/2 top-[68px] -translate-x-1/2 whitespace-nowrap rounded-full border border-violet-200/70 bg-white/90 px-2.5 py-1 backdrop-blur dark:border-violet-400/10 dark:bg-slate-900/80">
+                        <span className="text-[10px] font-semibold text-violet-600 dark:text-violet-400">
                           WebRTC node
                         </span>
                       </div>
@@ -551,9 +578,8 @@ export default function Home() {
                     <PeerNode icon={Laptop} label="Laptop" tone="emerald" className="animate-peer-left left-[12%] top-[22%]" />
                     <PeerNode icon={Smartphone} label="Mobile" tone="amber" className="animate-peer-right right-[11%] top-[50%]" />
 
-                    {/* Signal card */}
-                    <div className="animate-peer-right absolute right-[6%] top-[8%] flex items-center gap-2.5 rounded-xl border border-purple-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur dark:border-purple-400/10 dark:bg-slate-900/80">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-500/10">
+                    <div className="animate-peer-right absolute right-[6%] top-[8%] flex items-center gap-2.5 rounded-xl border border-violet-200 bg-white/90 px-3 py-2 shadow-sm backdrop-blur dark:border-violet-400/10 dark:bg-slate-900/80">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-500/10">
                         <NetworkSignalIcon
                           kind={net.kind}
                           bars={net.bars}
@@ -570,10 +596,9 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Bottom status */}
                     <div className="animate-peer-up absolute bottom-3 left-3 right-3 flex items-center justify-between">
                       <StatusChip icon={Signal} iconColor="text-emerald-500" label="Connection" value="Ready" valueColor="text-emerald-500" />
-                      <StatusChip icon={Zap} iconColor="text-purple-500" label="Route" value="Direct P2P" valueColor="text-purple-500" />
+                      <StatusChip icon={Zap} iconColor="text-violet-500" label="Route" value="Direct P2P" valueColor="text-violet-500" />
                     </div>
                   </div>
                 )}
@@ -584,13 +609,13 @@ export default function Home() {
                 <div
                   className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-colors ${
                     connected
-                      ? 'bg-purple-50 dark:bg-purple-500/10'
+                      ? 'bg-violet-50 dark:bg-violet-500/10'
                       : 'bg-amber-50 dark:bg-amber-500/10'
                   }`}
                 >
                   <ShieldCheck
                     className={`h-4 w-4 ${
-                      connected ? 'text-purple-600 dark:text-purple-400' : 'text-amber-500'
+                      connected ? 'text-violet-600 dark:text-violet-400' : 'text-amber-500'
                     }`}
                     strokeWidth={2}
                   />
@@ -609,22 +634,22 @@ export default function Home() {
             </section>
 
             {/* -------- JOIN ROOM -------- */}
-            <section className="rounded-[28px] border border-slate-200 bg-white p-6 dark:border-surface-border dark:bg-surface-card sm:p-7">
+            <section className="rounded-[28px] border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[12px] font-semibold text-slate-400 dark:text-slate-500">
+                  <p className="text-[10.5px] font-semibold text-slate-400 dark:text-slate-500">
                     Quick connect
                   </p>
-                  <h2 className="mt-1 font-heading text-[22px] font-bold tracking-tight text-slate-900 dark:text-white">
+                  <h2 className="mt-1 font-heading text-[17px] font-bold tracking-tight text-slate-900 dark:text-white">
                     Join a room
                   </h2>
                 </div>
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-50 dark:bg-purple-500/10">
-                  <Radio className="h-4 w-4 text-purple-600 dark:text-purple-400" strokeWidth={2} />
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-500/10">
+                  <Radio className="h-4 w-4 text-violet-600 dark:text-violet-400" strokeWidth={2} />
                 </div>
               </div>
 
-              <form onSubmit={handleJoin} className="mt-5 flex items-center gap-2">
+              <form onSubmit={handleJoin} className="mt-4 flex items-center gap-2">
                 <input
                   type="text"
                   value={code}
@@ -634,21 +659,21 @@ export default function Home() {
                   autoComplete="off"
                   spellCheck={false}
                   aria-label="Room code"
-                  className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[15px] font-bold tracking-[0.18em] text-slate-900 outline-none transition-all placeholder:font-normal placeholder:tracking-[0.15em] placeholder:text-slate-300 focus:border-purple-500 focus:bg-white focus:ring-4 focus:ring-purple-500/10 dark:border-surface-border dark:bg-white/[0.03] dark:text-white dark:placeholder:text-slate-600 dark:focus:border-purple-400 dark:focus:bg-white/[0.05]"
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-[14px] font-bold tracking-[0.18em] text-slate-900 outline-none transition-all placeholder:font-normal placeholder:tracking-[0.15em] placeholder:text-slate-300 focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-white dark:placeholder:text-slate-600 dark:focus:border-violet-400 dark:focus:bg-white/[0.05]"
                 />
                 <button
                   type="submit"
                   disabled={code.length !== 5}
                   aria-label="Join room"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-600 text-white shadow-sm transition-all hover:bg-purple-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/30 active:scale-95 disabled:cursor-not-allowed disabled:opacity-30"
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-white shadow-sm transition-colors duration-200 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-30 ${FOCUS_RING}`}
                 >
-                  <ArrowRight className="h-5 w-5" strokeWidth={2.5} />
+                  <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
                 </button>
               </form>
 
               <div className="mt-3 flex items-center gap-2">
                 <Lock className="h-3.5 w-3.5 text-emerald-500" />
-                <p className="text-[12px] text-slate-400 dark:text-slate-500">
+                <p className="text-[11.5px] text-slate-400 dark:text-slate-500">
                   5-character room code. No account required.
                 </p>
               </div>
@@ -658,15 +683,18 @@ export default function Home() {
 
         {/* ================= METRICS ================= */}
         <section aria-label="WebDrop at a glance" className="mt-6 sm:mt-8">
-          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 dark:border-surface-border dark:bg-white/[0.06] lg:grid-cols-4">
-            {METRICS.map((m) => (
-              <div key={m.label} className="bg-white px-5 py-6 text-center dark:bg-surface-card">
-                <dt className="sr-only">{m.label}</dt>
-                <dd className="font-heading text-[24px] font-extrabold tracking-tight text-purple-600 dark:text-purple-400 sm:text-[28px]">
-                  {m.value}
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 dark:border-white/[0.06] dark:bg-white/[0.06] lg:grid-cols-4">
+            {METRICS.map(({ value, label, icon: Icon }) => (
+              <div key={label} className="bg-white px-5 py-5 text-center dark:bg-white/[0.02]">
+                <dt className="sr-only">{label}</dt>
+                <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-500/10">
+                  <Icon className="h-4 w-4 text-violet-600 dark:text-violet-400" strokeWidth={2.2} />
+                </div>
+                <dd className="font-heading text-[20px] font-extrabold tracking-tight text-violet-600 dark:text-violet-400 sm:text-[22px]">
+                  {value}
                 </dd>
-                <p className="mt-1 text-[12px] font-medium text-slate-500 dark:text-slate-400" aria-hidden="true">
-                  {m.label}
+                <p className="mt-1 text-[11.5px] font-medium text-slate-500 dark:text-slate-400" aria-hidden="true">
+                  {label}
                 </p>
               </div>
             ))}
@@ -674,80 +702,85 @@ export default function Home() {
         </section>
 
         {/* ================= HOW IT WORKS ================= */}
-        <section className="mt-16 sm:mt-24">
+        <section className="mt-14 sm:mt-20">
           <SectionHeading
             title="Three steps. No sign-up."
             description="From opening the page to the first file arriving usually takes under a minute."
           />
 
-          <ol className="mx-auto mt-10 grid max-w-5xl gap-5 md:grid-cols-3">
+          <ol className="relative mx-auto mt-10 grid max-w-5xl gap-4 md:grid-cols-3">
+            <div className="pointer-events-none absolute left-0 right-0 top-[46px] hidden h-px bg-gradient-to-r from-transparent via-violet-200 to-transparent dark:via-violet-500/20 md:block" />
+
             {STEPS.map(({ icon: Icon, title, text }, i) => (
               <li
                 key={title}
-                className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-surface-border dark:bg-surface-card"
+                className="relative rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02]"
               >
                 <div className="flex items-center justify-between">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
-                    <Icon className="h-5 w-5" strokeWidth={2} />
+                  <span className="relative z-10 flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 ring-4 ring-white dark:bg-violet-500/10 dark:text-violet-400 dark:ring-surface-card">
+                    <Icon className="h-4 w-4" strokeWidth={2} />
                   </span>
-                  <span className="font-mono text-[13px] font-bold text-purple-200 dark:text-purple-500/40">
+                  <span className="font-mono text-[12px] font-bold text-violet-200 dark:text-violet-500/40">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                 </div>
-                <h3 className="mt-5 text-[16px] font-bold text-slate-900 dark:text-white">{title}</h3>
-                <p className="mt-2 text-[13px] leading-6 text-slate-500 dark:text-slate-400">{text}</p>
+                <h3 className="mt-4 text-[13.5px] font-bold text-slate-900 dark:text-white">{title}</h3>
+                <p className="mt-1.5 text-[12px] leading-5 text-slate-500 dark:text-slate-400">{text}</p>
               </li>
             ))}
           </ol>
         </section>
 
         {/* ================= USE CASES ================= */}
-        <section className="mt-16 sm:mt-24">
+        <section className="mt-14 sm:mt-20">
           <SectionHeading
             title="Made for everyday transfers."
             description="Whenever two devices need to swap files quickly, without the detour through a cloud drive."
           />
 
-          <div className="mx-auto mt-10 grid max-w-6xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mx-auto mt-10 grid max-w-6xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {USE_CASES.map(({ icon: Icon, title, text }) => (
               <div
                 key={title}
-                className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-surface-border dark:bg-surface-card"
+                className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
-                  <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                  <Icon className="h-4 w-4" strokeWidth={2} />
                 </span>
-                <h3 className="mt-4 text-[14px] font-bold text-slate-900 dark:text-white">{title}</h3>
-                <p className="mt-2 text-[12.5px] leading-6 text-slate-500 dark:text-slate-400">{text}</p>
+                <h3 className="mt-3 text-[12.5px] font-bold text-slate-900 dark:text-white">{title}</h3>
+                <p className="mt-1.5 text-[11.5px] leading-5 text-slate-500 dark:text-slate-400">{text}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* ================= FEATURES ================= */}
-        <div className="mt-16 sm:mt-24">
+        <div className="mt-14 sm:mt-20">
           <FeatureCards />
         </div>
 
         {/* ================= COMPARISON ================= */}
-        <section className="mt-16 sm:mt-24">
+        <section className="mt-14 sm:mt-20">
           <SectionHeading
             title="Why not just upload it somewhere?"
             description="Cloud sharing makes sense for files you want to keep. For a quick hand-off between two devices, a direct transfer is simpler and more private."
           />
 
-          <div className="mx-auto mt-10 max-w-4xl overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-surface-border dark:bg-surface-card">
+          <div className="mx-auto mt-10 max-w-4xl overflow-x-auto rounded-2xl border border-slate-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
             <table className="w-full min-w-[560px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-surface-border">
-                  <th scope="col" className="w-[28%] px-5 py-4">
+                <tr className="border-b border-slate-200 dark:border-white/[0.06]">
+                  <th scope="col" className="w-[28%] px-5 py-3">
                     <span className="sr-only">Topic</span>
                   </th>
-                  <th scope="col" className="px-5 py-4 text-[13px] font-semibold text-slate-500 dark:text-slate-400">
+                  <th scope="col" className="px-5 py-3 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
                     Typical cloud sharing
                   </th>
-                  <th scope="col" className="bg-purple-50/70 px-5 py-4 text-[13px] font-bold text-purple-700 dark:bg-purple-500/10 dark:text-purple-300">
-                    WebDrop
+                  <th scope="col" className="bg-violet-50/70 px-5 py-3 text-[11.5px] font-bold text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" strokeWidth={2.4} />
+                      WebDrop
+                    </span>
                   </th>
                 </tr>
               </thead>
@@ -757,16 +790,16 @@ export default function Home() {
                     key={row.topic}
                     className={i !== COMPARISON.length - 1 ? 'border-b border-slate-100 dark:border-white/[0.06]' : ''}
                   >
-                    <th scope="row" className="px-5 py-4 text-[13px] font-semibold text-slate-800 dark:text-slate-200">
+                    <th scope="row" className="px-5 py-3 text-[12px] font-semibold text-slate-800 dark:text-slate-200">
                       {row.topic}
                     </th>
-                    <td className="px-5 py-4 text-[13px] text-slate-500 dark:text-slate-400">
+                    <td className="px-5 py-3 text-[12px] text-slate-500 dark:text-slate-400">
                       <span className="inline-flex items-start gap-2">
                         <X className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 dark:text-slate-600" strokeWidth={2.5} />
                         {row.cloud}
                       </span>
                     </td>
-                    <td className="bg-purple-50/40 px-5 py-4 text-[13px] font-medium text-slate-700 dark:bg-purple-500/[0.05] dark:text-slate-200">
+                    <td className="bg-violet-50/40 px-5 py-3 text-[12px] font-medium text-slate-700 dark:bg-violet-500/[0.05] dark:text-slate-200">
                       <span className="inline-flex items-start gap-2">
                         <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={2.8} />
                         {row.webdrop}
@@ -780,34 +813,34 @@ export default function Home() {
         </section>
 
         {/* ================= PRIVACY ================= */}
-        <section className="mt-16 sm:mt-24">
-          <div className="grid overflow-hidden rounded-[28px] border border-slate-200 bg-white dark:border-surface-border dark:bg-surface-card lg:grid-cols-[1fr_1.1fr]">
-            <div className="relative p-7 sm:p-10">
-              <div className="pointer-events-none absolute -left-24 -top-24 h-56 w-56 rounded-full bg-purple-200/40 blur-3xl dark:bg-purple-500/10" />
+        <section className="mt-14 sm:mt-20">
+          <div className="grid overflow-hidden rounded-[28px] border border-slate-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02] lg:grid-cols-[1fr_1.1fr]">
+            <div className="relative p-6 sm:p-8">
+              <div className="pointer-events-none absolute -left-24 -top-24 h-56 w-56 rounded-full bg-violet-200/40 blur-3xl dark:bg-violet-500/10" />
               <div className="relative">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-500/10 dark:text-purple-400">
-                  <ShieldCheck className="h-5 w-5" strokeWidth={2} />
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                  <ShieldCheck className="h-4 w-4" strokeWidth={2.2} />
                 </span>
-                <h2 className="mt-6 font-heading text-[26px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[32px]">
+                <h2 className="mt-5 font-heading text-[20px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[24px]">
                   Private by design, not by promise.
                 </h2>
-                <p className="mt-4 text-[14px] leading-7 text-slate-500 dark:text-slate-400">
+                <p className="mt-3 text-[12.5px] leading-6 text-slate-500 dark:text-slate-400">
                   WebDrop&apos;s server has one job: introducing two devices to
-                  each other. Once they are connected, everything you send is
+                  each other. Once they're connected, everything you send is
                   encrypted with DTLS and goes directly between them. There is
                   nothing on our side to leak, because there is nothing stored.
                 </p>
                 <Link
                   to="/team"
-                  className={`mt-6 inline-flex items-center gap-2 rounded-lg text-[13px] font-semibold text-purple-700 hover:text-purple-900 dark:text-purple-300 dark:hover:text-white ${FOCUS_RING}`}
+                  className={`mt-4 inline-flex items-center gap-2 rounded-lg text-[12px] font-semibold text-violet-700 dark:text-violet-300 ${FOCUS_RING}`}
                 >
                   See how it is built
-                  <ArrowRight className="h-4 w-4" strokeWidth={2.4} />
+                  <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.4} />
                 </Link>
               </div>
             </div>
 
-            <div className="grid gap-px border-t border-slate-200 bg-slate-200 dark:border-surface-border dark:bg-white/[0.06] sm:grid-cols-2 lg:border-l lg:border-t-0">
+            <div className="grid gap-px border-t border-slate-200 bg-slate-200 dark:border-white/[0.06] dark:bg-white/[0.06] sm:grid-cols-2 lg:border-l lg:border-t-0">
               <VisibilityColumn icon={Eye} tone="neutral" title="What the server sees" items={SERVER_SEES} />
               <VisibilityColumn icon={EyeOff} tone="good" title="What it never sees" items={SERVER_NEVER} />
             </div>
@@ -815,18 +848,17 @@ export default function Home() {
         </section>
 
         {/* ================= APPS / DOWNLOAD ================= */}
-        <section id="download" className="mt-16 scroll-mt-24 sm:mt-24">
+        <section id="download" className="mt-14 scroll-mt-24 sm:mt-20">
           <SectionHeading
             title="Use WebDrop on any device."
             description="Open it in your browser with nothing to install, or add the app to your phone or computer. Downloads start right here, you stay on this page."
           />
 
-          <div className="mx-auto mt-10 grid max-w-5xl gap-5 md:grid-cols-3">
-            {/* Web */}
-            <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 dark:border-surface-border dark:bg-surface-card">
+          <div className="mx-auto mt-10 grid max-w-5xl gap-4 md:grid-cols-3">
+            <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02]">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-500/15">
-                  <Globe className="h-5 w-5 text-purple-600 dark:text-purple-400" strokeWidth={2} />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-500/15">
+                  <Globe className="h-5 w-5 text-violet-600 dark:text-violet-400" strokeWidth={2} />
                 </span>
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-slate-900 dark:text-white">Web</p>
@@ -843,7 +875,7 @@ export default function Home() {
                 type="button"
                 onClick={handleCreateRoom}
                 disabled={creating}
-                className={`mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3.5 text-[12px] font-semibold text-white hover:bg-purple-700 disabled:opacity-60 ${FOCUS_RING}`}
+                className={`mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-3.5 text-[12px] font-semibold text-white transition-colors duration-200 hover:bg-violet-700 disabled:opacity-60 ${FOCUS_RING}`}
               >
                 <Radio className="h-3.5 w-3.5" strokeWidth={2.4} />
                 Open in browser
@@ -857,17 +889,17 @@ export default function Home() {
         </section>
 
         {/* ================= FAQ ================= */}
-        <section className="mt-16 sm:mt-24">
+        <section className="mt-14 sm:mt-20">
           <SectionHeading
             title="Frequently asked questions"
             description="Quick answers about privacy, limits and how connections work."
           />
 
-          <div className="mx-auto mt-10 max-w-3xl divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:divide-white/[0.06] dark:border-surface-border dark:bg-surface-card">
+          <div className="mx-auto mt-10 max-w-3xl divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white dark:divide-white/[0.06] dark:border-white/[0.06] dark:bg-white/[0.02]">
             {FAQ.map((item) => (
               <details key={item.q} className="group">
                 <summary
-                  className={`flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-[14px] font-semibold text-slate-900 hover:bg-slate-50 dark:text-white dark:hover:bg-white/[0.03] sm:px-6 [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
+                  className={`flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-3.5 text-[12.5px] font-semibold text-slate-900 transition-colors duration-200 hover:bg-slate-50 dark:text-white dark:hover:bg-white/[0.03] sm:px-6 [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
                 >
                   {item.q}
                   <Plus
@@ -875,7 +907,7 @@ export default function Home() {
                     strokeWidth={2.4}
                   />
                 </summary>
-                <p className="px-5 pb-5 text-[13px] leading-7 text-slate-500 dark:text-slate-400 sm:px-6">
+                <p className="px-5 pb-4 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400 sm:px-6">
                   {item.a}
                 </p>
               </details>
@@ -884,28 +916,35 @@ export default function Home() {
         </section>
 
         {/* ================= FINAL CTA ================= */}
-        <section className="mt-16 sm:mt-24">
-          <div className="relative overflow-hidden rounded-[28px] border border-purple-500/20 bg-slate-950 px-6 py-12 text-center shadow-xl shadow-purple-900/20 sm:px-10 sm:py-14">
-            <div className="pointer-events-none absolute left-1/2 top-[-160px] h-[320px] w-[560px] -translate-x-1/2 rounded-full bg-purple-500/25 blur-3xl" />
+        <section className="mt-14 sm:mt-20">
+          <div className="relative overflow-hidden rounded-[28px] border border-violet-500/20 bg-slate-950 px-6 py-10 text-center shadow-xl shadow-violet-900/20 sm:px-10 sm:py-12">
+            <div className="pointer-events-none absolute left-1/2 top-[-160px] h-[320px] w-[560px] -translate-x-1/2 rounded-full bg-violet-500/25 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-32 right-[-80px] h-[260px] w-[260px] rounded-full bg-indigo-500/20 blur-3xl" />
 
             <div className="relative">
-              <h2 className="font-heading text-[28px] font-extrabold tracking-tight text-white sm:text-[38px]">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 backdrop-blur">
+                <Award className="h-3.5 w-3.5 text-amber-400" strokeWidth={2.4} />
+                <span className="text-[10.5px] font-semibold text-white/90">
+                  Trusted by developers, students & teams
+                </span>
+              </div>
+
+              <h2 className="font-heading text-[22px] font-extrabold tracking-tight text-white sm:text-[28px]">
                 Ready to send your first file?
               </h2>
-              <p className="mx-auto mt-4 max-w-xl text-[14px] leading-7 text-slate-400 sm:text-[15px]">
+              <p className="mx-auto mt-3 max-w-xl text-[12.5px] leading-6 text-slate-400 sm:text-[13.5px] sm:leading-7">
                 Create a room, share the code, and start transferring. It takes
                 less than a minute and nothing is stored afterwards.
               </p>
 
-              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <div className="mt-7 flex flex-col items-center justify-center gap-2.5 sm:flex-row">
                 <button
                   type="button"
                   onClick={handleCreateRoom}
                   disabled={creating}
-                  className="group inline-flex items-center gap-2.5 rounded-xl bg-purple-600 px-6 py-3.5 text-[14px] font-semibold text-white shadow-[0_12px_30px_rgba(124,58,237,0.35)] transition-all hover:-translate-y-0.5 hover:bg-purple-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-400/40 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={`group inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-[13px] font-bold text-white shadow-lg shadow-violet-600/25 transition-colors duration-200 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
-                  <Radio className="h-[18px] w-[18px]" strokeWidth={2.2} />
+                  <Radio className="h-4 w-4" strokeWidth={2.2} />
                   {creating ? 'Creating…' : 'Create secure room'}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
                 </button>
@@ -913,7 +952,7 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => navigate('/join')}
-                  className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3.5 text-[14px] font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-white/[0.1] focus:outline-none focus-visible:ring-4 focus-visible:ring-white/20"
+                  className={`inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-5 py-3 text-[13px] font-bold text-white transition-colors duration-200 hover:bg-white/[0.1] sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
                   <Cable className="h-4 w-4" strokeWidth={2.2} />
                   Join with a code
@@ -923,6 +962,8 @@ export default function Home() {
           </div>
         </section>
       </main>
+
+      <ScrollToTop />
 
       {/* ================= ANIMATIONS ================= */}
       <style>{`
@@ -992,10 +1033,6 @@ export default function Home() {
 
 /* =========================================================
    DOWNLOAD ITEM
-
-   Shared by the dropdown and the "Use WebDrop on any device"
-   section. Downloads start in place: no new tab, no page
-   change, so the user always stays on the home page.
 ========================================================= */
 
 function DownloadItem({ item, currentPlatform, menu = false, onStarted }) {
@@ -1022,10 +1059,10 @@ function DownloadItem({ item, currentPlatform, menu = false, onStarted }) {
   };
 
   return (
-    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-surface-border dark:bg-white/[0.03] md:bg-white md:p-5 md:dark:bg-surface-card">
+    <div className="flex h-full flex-col rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-white/[0.06] dark:bg-white/[0.03] md:bg-white md:p-5 md:dark:bg-white/[0.02]">
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-500/15">
-          <Icon className="h-5 w-5 text-purple-600 dark:text-purple-400" strokeWidth={2} />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-500/15">
+          <Icon className="h-5 w-5 text-violet-600 dark:text-violet-400" strokeWidth={2} />
         </div>
 
         <div className="min-w-0 flex-1">
@@ -1055,8 +1092,8 @@ function DownloadItem({ item, currentPlatform, menu = false, onStarted }) {
             type="button"
             role="menuitem"
             onClick={() => begin(latest)}
-            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[12px] font-semibold text-white transition-colors ${
-              started === latest.version ? 'bg-emerald-600' : 'bg-purple-600 hover:bg-purple-700'
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[12px] font-semibold text-white transition-colors duration-200 ${
+              started === latest.version ? 'bg-emerald-600' : 'bg-violet-600 hover:bg-violet-700'
             } ${FOCUS_RING}`}
           >
             {started === latest.version ? (
@@ -1088,8 +1125,8 @@ function DownloadItem({ item, currentPlatform, menu = false, onStarted }) {
         <button
           type="button"
           onClick={() => begin(latest)}
-          className={`mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[12px] font-semibold text-white transition-colors ${
-            started === latest.version ? 'bg-emerald-600' : 'bg-purple-600 hover:bg-purple-700'
+          className={`mt-4 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[12px] font-semibold text-white transition-colors duration-200 ${
+            started === latest.version ? 'bg-emerald-600' : 'bg-violet-600 hover:bg-violet-700'
           } ${FOCUS_RING}`}
         >
           {started === latest.version ? (
@@ -1130,7 +1167,7 @@ function DownloadItem({ item, currentPlatform, menu = false, onStarted }) {
                 <button
                   type="button"
                   onClick={() => begin(v)}
-                  className="inline-flex items-center gap-1 font-semibold text-purple-600 hover:underline dark:text-purple-400"
+                  className="inline-flex items-center gap-1 font-semibold text-violet-600 hover:underline dark:text-violet-400"
                 >
                   <Download className="h-3 w-3" strokeWidth={2.4} />
                   {started === v.version ? 'Started' : 'Download'}
@@ -1146,12 +1183,6 @@ function DownloadItem({ item, currentPlatform, menu = false, onStarted }) {
 
 /* =========================================================
    DOWNLOAD APP DROPDOWN
-
-   - Desktop / tablet: popover under the button.
-   - Phones: bottom sheet that slides up, so it is never cut
-     off or pushed outside the screen.
-   - Opens and closes with a smooth transition.
-   - Downloads start in place, the user stays on the home page.
 ========================================================= */
 
 const CLOSE_MS = 220;
@@ -1166,7 +1197,6 @@ function DownloadDropdown({ currentPlatform }) {
   const buttonRef = useRef(null);
   const panelRef = useRef(null);
 
-  /* Put user's platform first */
   const items = useMemo(
     () =>
       [...APP_DOWNLOADS].sort(
@@ -1193,7 +1223,6 @@ function DownloadDropdown({ currentPlatform }) {
     setPos({ top: rect.bottom + 8, left, width });
   }, []);
 
-  /* Mount first, then animate in. Animate out, then unmount. */
   useEffect(() => {
     if (open) {
       updatePosition();
@@ -1220,7 +1249,7 @@ function DownloadDropdown({ currentPlatform }) {
     };
 
     const onPointerDown = (e) => {
-      if (window.innerWidth < 640) return; // sheet closes via backdrop
+      if (window.innerWidth < 640) return;
 
       const insidePanel = panelRef.current?.contains(e.target);
       const insideButton = buttonRef.current?.contains(e.target);
@@ -1243,7 +1272,6 @@ function DownloadDropdown({ currentPlatform }) {
     };
   }, [open, updatePosition]);
 
-  /* Lock page scroll while the bottom sheet is open */
   useEffect(() => {
     if (!mounted || !sheet) return undefined;
 
@@ -1255,7 +1283,6 @@ function DownloadDropdown({ currentPlatform }) {
     };
   }, [mounted, sheet]);
 
-  /* Let the user see "Download started", then close smoothly */
   const handleStarted = () => {
     setTimeout(() => setOpen(false), 1100);
   };
@@ -1268,7 +1295,7 @@ function DownloadDropdown({ currentPlatform }) {
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-6 py-3.5 text-[14px] font-semibold text-purple-700 transition-all hover:-translate-y-0.5 hover:bg-purple-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-purple-500/20 dark:border-purple-500/20 dark:bg-purple-500/10 dark:text-purple-300 dark:hover:bg-purple-500/20"
+        className={`inline-flex items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-5 py-3 text-[13px] font-semibold text-violet-700 transition-colors duration-200 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20 sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
       >
         <Download className="h-4 w-4" strokeWidth={2.2} />
         Download app
@@ -1281,7 +1308,6 @@ function DownloadDropdown({ currentPlatform }) {
       {mounted &&
         createPortal(
           sheet ? (
-            /* ---------- Phone: bottom sheet ---------- */
             <div className="fixed inset-0 z-[100]">
               <div
                 onClick={() => setOpen(false)}
@@ -1295,7 +1321,7 @@ function DownloadDropdown({ currentPlatform }) {
                 ref={panelRef}
                 role="menu"
                 aria-label="Download app"
-                className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-slate-200 bg-white px-4 pt-3 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none dark:border-surface-border dark:bg-surface-card ${
+                className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-slate-200 bg-white px-4 pt-3 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none dark:border-white/[0.06] dark:bg-white/[0.02] ${
                   shown ? 'translate-y-0' : 'translate-y-full'
                 }`}
                 style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
@@ -1304,10 +1330,10 @@ function DownloadDropdown({ currentPlatform }) {
 
                 <div className="mt-3 flex items-center justify-between">
                   <div>
-                    <h2 className="text-[16px] font-bold text-slate-900 dark:text-white">
+                    <h2 className="text-[15px] font-bold text-slate-900 dark:text-white">
                       Download WebDrop
                     </h2>
-                    <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">
+                    <p className="mt-0.5 text-[11.5px] text-slate-500 dark:text-slate-400">
                       Choose your device. You stay on this page.
                     </p>
                   </div>
@@ -1316,7 +1342,7 @@ function DownloadDropdown({ currentPlatform }) {
                     type="button"
                     onClick={() => setOpen(false)}
                     aria-label="Close"
-                    className={`flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 dark:border-surface-border dark:text-slate-400 ${FOCUS_RING}`}
+                    className={`flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 dark:border-white/[0.06] dark:text-slate-400 ${FOCUS_RING}`}
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -1336,13 +1362,12 @@ function DownloadDropdown({ currentPlatform }) {
               </div>
             </div>
           ) : (
-            /* ---------- Tablet / desktop: popover ---------- */
             <div
               ref={panelRef}
               role="menu"
               aria-label="Download app"
               style={{ top: pos.top, left: pos.left, width: pos.width }}
-              className={`fixed z-[100] max-h-[70vh] origin-top-left overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl transition duration-200 ease-out motion-reduce:transition-none dark:border-surface-border dark:bg-surface-card ${
+              className={`fixed z-[100] max-h-[70vh] origin-top-left overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl transition duration-200 ease-out motion-reduce:transition-none dark:border-white/[0.06] dark:bg-white/[0.02] ${
                 shown
                   ? 'translate-y-0 scale-100 opacity-100'
                   : '-translate-y-1 scale-95 opacity-0'
@@ -1374,11 +1399,11 @@ function DownloadDropdown({ currentPlatform }) {
 function SectionHeading({ title, description }) {
   return (
     <div className="mx-auto max-w-2xl text-center">
-      <h2 className="font-heading text-[26px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[34px]">
+      <h2 className="font-heading text-[20px] font-extrabold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-[26px]">
         {title}
       </h2>
       {description && (
-        <p className="mt-4 text-[14px] leading-7 text-slate-500 dark:text-slate-400 sm:text-[15px]">
+        <p className="mt-3 text-[12.5px] leading-6 text-slate-500 dark:text-slate-400 sm:text-[13.5px]">
           {description}
         </p>
       )}
@@ -1390,7 +1415,7 @@ function VisibilityColumn({ icon: Icon, tone, title, items }) {
   const good = tone === 'good';
 
   return (
-    <div className="bg-white p-6 dark:bg-surface-card sm:p-7">
+    <div className="bg-white p-5 dark:bg-white/[0.02] sm:p-6">
       <span
         className={`flex h-10 w-10 items-center justify-center rounded-xl ${
           good
@@ -1398,12 +1423,12 @@ function VisibilityColumn({ icon: Icon, tone, title, items }) {
             : 'bg-slate-100 text-slate-600 dark:bg-white/[0.06] dark:text-slate-300'
         }`}
       >
-        <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+        <Icon className="h-4 w-4" strokeWidth={2.2} />
       </span>
 
-      <h3 className="mt-4 text-[14px] font-bold text-slate-900 dark:text-white">{title}</h3>
+      <h3 className="mt-4 text-[13px] font-bold text-slate-900 dark:text-white">{title}</h3>
 
-      <ul className="mt-4 space-y-3">
+      <ul className="mt-3 space-y-2.5">
         {items.map((item) => (
           <li key={item} className="flex items-start gap-2.5">
             {good ? (
@@ -1411,7 +1436,7 @@ function VisibilityColumn({ icon: Icon, tone, title, items }) {
             ) : (
               <Check className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" strokeWidth={2.4} />
             )}
-            <span className="text-[13px] leading-6 text-slate-600 dark:text-slate-300">{item}</span>
+            <span className="text-[12px] leading-5 text-slate-600 dark:text-slate-300">{item}</span>
           </li>
         ))}
       </ul>
@@ -1422,10 +1447,10 @@ function VisibilityColumn({ icon: Icon, tone, title, items }) {
 function TechItem({ icon: Icon, color, label, value, className = '' }) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <Icon className={`h-4 w-4 ${color}`} />
+      <Icon className={`h-3.5 w-3.5 ${color}`} />
       <div>
-        <p className="text-[11px] font-medium text-slate-400">{label}</p>
-        <p className="mt-0.5 text-[12px] font-semibold text-slate-700 dark:text-slate-300">{value}</p>
+        <p className="text-[10px] font-medium text-slate-400">{label}</p>
+        <p className="mt-0.5 text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">{value}</p>
       </div>
     </div>
   );

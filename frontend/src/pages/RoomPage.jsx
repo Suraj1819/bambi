@@ -68,8 +68,6 @@ import {
   BarChart3,
   CheckSquare,
   Square,
-  ArrowDownToLine,
-  ArrowUpFromLine,
   CircleDot,
   CircleCheck,
   CircleX,
@@ -632,16 +630,16 @@ function EmptyQueue({ type, onShare }) {
   const incoming = type === 'incoming';
 
   return (
-    <div className="flex min-h-[140px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-5 text-center dark:border-slate-800 dark:bg-slate-900/20">
-      <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-400 shadow-sm dark:bg-slate-800/80 dark:text-slate-500">
-        {incoming ? <Inbox size={18} /> : <Send size={18} />}
+    <div className="flex min-h-[160px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-5 py-8 text-center dark:border-slate-800 dark:bg-slate-900/20">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm dark:bg-slate-800/80 dark:text-slate-500">
+        {incoming ? <Inbox size={20} /> : <Send size={20} />}
       </div>
 
-      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+      <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
         {incoming ? 'No incoming files' : 'No outgoing files'}
       </p>
 
-      <p className="mt-1 max-w-xs text-[11px] leading-5 text-slate-500 dark:text-slate-500">
+      <p className="mt-1.5 max-w-xs text-[11px] leading-5 text-slate-500 dark:text-slate-500">
         {incoming
           ? 'Files received from the peer will appear here.'
           : 'Drag files into the drop zone above, paste, or choose files.'}
@@ -651,7 +649,7 @@ function EmptyQueue({ type, onShare }) {
         <button
           type="button"
           onClick={onShare}
-          className="mt-3 inline-flex h-9 w-full max-w-[220px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-600 active:scale-[0.98] dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400 sm:h-8 sm:w-auto sm:text-[10px]"
+          className="mt-4 inline-flex h-9 w-full max-w-[220px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition hover:border-violet-300 hover:text-violet-600 active:scale-[0.98] dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400 sm:h-8 sm:w-auto sm:text-[10px]"
         >
           <Paperclip size={12} />
           Choose files
@@ -705,311 +703,6 @@ function SpeedometerIndicator({ quality }) {
 /* -------------------------------------------------------------------------- */
 /* File row                                         */
 /* -------------------------------------------------------------------------- */
-
-function FileRow({
-  file,
-  direction,
-  onAccept,
-  onReject,
-  onDownload,
-  onRetry,
-  onCancel,
-  onRemove,
-  onCopyName,
-}) {
-  const isIncoming = direction === 'incoming';
-  const status = file?.status || 'pending';
-
-  const isPending =
-    status === 'pending' || status === 'waiting' || status === 'offer';
-
-  const isActive =
-    status === 'sending' ||
-    status === 'receiving' ||
-    status === 'transferring' ||
-    status === 'active';
-
-  const isCompleted =
-    status === 'completed' || status === 'success' || status === 'done';
-
-  const isFailed = status === 'failed' || status === 'error';
-
-  const isCancelled =
-    status === 'cancelled' ||
-    status === 'canceled' ||
-    status === 'rejected';
-
-  const transferred = isIncoming
-    ? Number(file?.bytesReceived || file?.receivedBytes || 0)
-    : Number(file?.bytesSent || file?.sentBytes || 0);
-
-  const calculatedProgress =
-    file?.size > 0 ? (transferred / file.size) * 100 : 0;
-
-  const progress = Math.min(
-    100,
-    Math.max(
-      0,
-      isCompleted
-        ? 100
-        : Math.max(Number(file?.progress || 0), calculatedProgress),
-    ),
-  );
-
-  const speed = Number(file?.speed || file?.bytesPerSecond || 0);
-  const eta = Number(file?.eta || file?.remainingTime || 0);
-  const fileId = file?.fileId || file?.id;
-
-  const handleRemoveClick = () => onRemove?.(fileId, direction);
-
-  return (
-    <div
-      className={`rounded-2xl border bg-white px-3 py-3 shadow-sm transition hover:border-slate-300 dark:bg-[#0f1115] dark:hover:border-slate-700 ${
-        isCancelled
-          ? 'border-red-200 dark:border-red-900/50'
-          : 'border-slate-200 dark:border-slate-800'
-      }`}
-    >
-      <div className="flex min-w-0 items-start gap-3">
-        <FileTypeIcon file={file} />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-start gap-2">
-            <p
-              className="min-w-0 flex-1 break-words text-xs font-bold leading-5 text-slate-900 dark:text-white sm:truncate sm:leading-normal"
-              title={file?.name}
-            >
-              {file?.name || 'Unnamed file'}
-            </p>
-
-            <button
-              type="button"
-              onClick={() => onCopyName?.(file?.name)}
-              className="hidden h-6 w-6 shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-violet-600 dark:hover:bg-slate-800 sm:flex"
-              title="Copy filename"
-              aria-label="Copy filename"
-            >
-              <CopyIcon size={12} />
-            </button>
-
-            <span className="shrink-0 pt-0.5 text-[10px] font-medium text-slate-400 dark:text-slate-500">
-              {formatBytes(file?.size || 0)}
-            </span>
-          </div>
-
-          {isActive ? (
-            <div className="mt-1.5 flex items-center gap-2">
-              <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                <div
-                  className={`h-full rounded-full transition-[width] duration-200 ${
-                    isIncoming ? 'bg-blue-500' : 'bg-violet-600'
-                  }`}
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-
-              <span className="w-9 shrink-0 text-right text-[9px] font-bold text-slate-500 dark:text-slate-400">
-                {Math.round(progress)}%
-              </span>
-            </div>
-          ) : (
-            <div className="mt-1 flex items-center gap-2 text-[10px]">
-              {isPending && isIncoming && (
-                <span className="font-semibold text-amber-600 dark:text-amber-400">
-                  Waiting for approval
-                </span>
-              )}
-
-              {isCompleted && (
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                  Completed
-                </span>
-              )}
-
-              {isFailed && (
-                <span className="font-semibold text-red-600 dark:text-red-400">
-                  Transfer failed
-                </span>
-              )}
-
-              {isCancelled && (
-                <span className="inline-flex items-center gap-1 font-semibold text-red-600 dark:text-red-400">
-                  <XCircle size={11} />
-                  Cancelled
-                </span>
-              )}
-
-              {!isPending &&
-                !isCompleted &&
-                !isFailed &&
-                !isCancelled &&
-                !isActive && (
-                  <span className="text-slate-400 dark:text-slate-500">
-                    {isIncoming ? 'Incoming' : 'Outgoing'}
-                  </span>
-                )}
-            </div>
-          )}
-
-          {isActive && (
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <span className="text-[9px] font-semibold text-slate-400 dark:text-slate-500">
-                {isIncoming ? 'Receiving' : 'Sending'}
-              </span>
-
-              <div className="flex items-center gap-2 text-[9px] text-slate-400 dark:text-slate-500">
-                {speed > 0 && <span>{formatSpeed(speed)}</span>}
-                {eta > 0 && <span>{formatETA(eta)}</span>}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 sm:hidden">
-            {isPending && isIncoming && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onAccept?.(fileId)}
-                  className="flex h-9 flex-1 min-w-[100px] items-center justify-center gap-1.5 rounded-xl bg-violet-600 px-3 text-[11px] font-bold text-white shadow-sm transition active:scale-95"
-                >
-                  <CheckCircle size={14} />
-                  Accept
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onReject?.(fileId)}
-                  className="flex h-9 flex-1 min-w-[100px] items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 transition active:scale-95 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
-                >
-                  <X size={14} />
-                  Reject
-                </button>
-              </>
-            )}
-
-            {isActive && (
-              <button
-                type="button"
-                onClick={() => onCancel?.(fileId)}
-                className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-red-200 px-3 text-[11px] font-bold text-red-500 transition active:scale-95 dark:border-red-900/50"
-              >
-                <X size={14} />
-                Cancel
-              </button>
-            )}
-
-            {isCompleted && isIncoming && (
-              <button
-                type="button"
-                onClick={() => onDownload?.(fileId)}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 active:scale-[0.98] dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-200 dark:hover:bg-slate-800"
-              >
-                <Download size={16} />
-                Download
-              </button>
-            )}
-
-            {isFailed && (
-              <button
-                type="button"
-                onClick={() => onRetry?.(fileId)}
-                className="flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 text-[11px] font-bold text-slate-600 transition active:scale-95 dark:border-slate-700 dark:text-slate-300"
-              >
-                <RotateCcw size={14} />
-                Retry
-              </button>
-            )}
-
-            {!isActive && !isPending && !isCompleted && !isFailed && (
-              <button
-                type="button"
-                onClick={handleRemoveClick}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-400 transition active:scale-95 hover:bg-red-50 hover:text-red-500 dark:border-slate-700 dark:hover:bg-red-500/10"
-                title="Remove"
-                aria-label="Remove file"
-              >
-                <Trash2 size={14} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-          {isPending && isIncoming && (
-            <>
-              <button
-                type="button"
-                onClick={() => onReject?.(fileId)}
-                className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[10px] font-bold text-slate-500 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-              >
-                <X size={12} />
-                Reject
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onAccept?.(fileId)}
-                className="flex h-8 items-center gap-1 rounded-lg bg-violet-600 px-2.5 text-[10px] font-bold text-white transition hover:bg-violet-700"
-              >
-                <CheckCircle size={12} />
-                Accept
-              </button>
-            </>
-          )}
-
-          {isActive && (
-            <button
-              type="button"
-              onClick={() => onCancel?.(fileId)}
-              className="flex h-8 items-center gap-1 rounded-lg border border-red-200 px-2.5 text-[10px] font-bold text-red-500 transition hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-950/20"
-              title="Cancel transfer"
-              aria-label="Cancel transfer"
-            >
-              <X size={12} />
-              Cancel
-            </button>
-          )}
-
-          {isCompleted && isIncoming && (
-            <button
-              type="button"
-              onClick={() => onDownload?.(fileId)}
-              title="Download file"
-              aria-label={`Download ${file?.name || 'file'}`}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:scale-95 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              <Download size={13} />
-              Download
-            </button>
-          )}
-
-          {isFailed && (
-            <button
-              type="button"
-              onClick={() => onRetry?.(fileId)}
-              className="flex h-8 items-center gap-1 rounded-lg border border-slate-200 px-2.5 text-[10px] font-bold text-slate-600 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-            >
-              <RotateCcw size={12} />
-              Retry
-            </button>
-          )}
-
-          {!isActive && !isPending && !isCompleted && !isFailed && (
-            <button
-              type="button"
-              onClick={handleRemoveClick}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-400 transition hover:bg-red-50 hover:text-red-500 dark:border-slate-700 dark:hover:bg-red-500/10"
-              title="Remove"
-              aria-label="Remove file"
-            >
-              <Trash2 size={13} />
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function EnhancedFileRow({
   file,
@@ -1429,12 +1122,6 @@ export default function RoomPage() {
   const deviceInfo = ctxDeviceInfo || detectDeviceInfo();
   const roomCode = (urlCode || '').toUpperCase();
 
-  /**
-   * Left sidebar (Peer radar + details):
-   * - xl and up: flex layout, drag the handle to resize, collapse with the
-   *   chevron button. Width and collapsed state are remembered.
-   * - Below xl: sidebar stacks above the main content (no resize/collapse).
-   */
   const sidebar = useResizableSidebar();
 
   const [joining, setJoining] = useState(true);
@@ -1454,14 +1141,11 @@ export default function RoomPage() {
   const [selectedFiles, setSelectedFiles] = useState(new Set());
   const [showConnectionDetails, setShowConnectionDetails] = useState(false);
   const [activity, setActivity] = useState([]);
+  const [incomingOfferToast, setIncomingOfferToast] = useState(null);
 
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
-  /**
-   * Intermediate phase for guests:
-   * null | 'kicked' | 'ended'
-   */
   const [removedPhase, setRemovedPhase] = useState(null);
 
   const fileInputRef = useRef(null);
@@ -1470,10 +1154,6 @@ export default function RoomPage() {
   const joinedRef = useRef(false);
   const disconnectingRef = useRef(false);
   const hostTokenRef = useRef(getHostToken(roomCode));
-
-  /* ------------------------------------------------------------------------ */
-  /* Stable refs for context setters                                          */
-  /* ------------------------------------------------------------------------ */
 
   const setUsersRef = useRef(setUsers);
   const setLockedRef = useRef(setLocked);
@@ -1491,7 +1171,6 @@ export default function RoomPage() {
     setRoomErrorRef.current = setRoomError;
   }, [setUsers, setLocked]);
 
-  /* Track incoming file IDs we've already toasted for. */
   const notifiedIncomingRef = useRef(new Set());
   const activitySnapshotRef = useRef(new Map());
 
@@ -1615,6 +1294,45 @@ export default function RoomPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
+  /* Always open Room page from the top (never mid-page) */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const scrollTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    scrollTop();
+
+    // Prevent browser restoring previous scroll position on SPA navigations
+    const previous = window.history.scrollRestoration;
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+
+    // Re-assert after layout / join spinner settles
+    const t1 = window.setTimeout(scrollTop, 50);
+    const t2 = window.setTimeout(scrollTop, 300);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      if ('scrollRestoration' in window.history && previous) {
+        window.history.scrollRestoration = previous;
+      }
+    };
+  }, [roomCode]);
+
+  // After join completes, ensure we are still at the top
+  useEffect(() => {
+    if (joining) return;
+    if (typeof window === 'undefined') return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [joining]);
+
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -1677,11 +1395,6 @@ export default function RoomPage() {
       toast.error('This room has expired.');
     };
 
-    /**
-     * Host ended the room.
-     * - Guest should see an intermediate phase.
-     * - Host navigates directly to / (they triggered it themselves).
-     */
     const handleRoomEnded = () => {
       if (disconnectingRef.current) return;
 
@@ -1694,20 +1407,14 @@ export default function RoomPage() {
       }
 
       if (role === 'host') {
-        // Host: straight to /
         disconnectingRef.current = true;
         navigate('/', { replace: true });
         return;
       }
 
-      // Guest: show intermediate "room ended" phase
       setRemovedPhase('ended');
     };
 
-    /**
-     * Guest was kicked by the host.
-     * - Show an intermediate phase for the guest.
-     */
     const handleKicked = () => {
       if (disconnectingRef.current) return;
 
@@ -1719,7 +1426,6 @@ export default function RoomPage() {
         // ignore
       }
 
-      // Guest: show intermediate "kicked" phase
       setRemovedPhase('kicked');
     };
 
@@ -1895,10 +1601,6 @@ export default function RoomPage() {
     [role, socket, roomCode],
   );
 
-  /* ------------------------------------------------------------------------ */
-  /* End Room — host ends the room, everyone goes to /                        */
-  /* Host navigates directly. Guest gets intermediate phase (via socket).    */
-  /* ------------------------------------------------------------------------ */
   const performEndRoom = useCallback(() => {
     if (role !== 'host' || !socket) return;
 
@@ -1919,7 +1621,6 @@ export default function RoomPage() {
           // ignore
         }
 
-        // Host: straight to /
         navigate('/', { replace: true });
       },
     );
@@ -1930,10 +1631,6 @@ export default function RoomPage() {
     setConfirmEndOpen(true);
   }, [role, socket]);
 
-  /* ------------------------------------------------------------------------ */
-  /* Leave Room — user leaves, room stays alive                              */
-  /* Host & Guest: both navigate directly to /.                              */
-  /* ------------------------------------------------------------------------ */
   const performLeaveRoom = useCallback(() => {
     disconnectingRef.current = true;
 
@@ -1943,7 +1640,6 @@ export default function RoomPage() {
       // ignore
     }
 
-    // Both host and guest: straight to /
     navigate('/', { replace: true });
   }, [socket, roomCode, navigate]);
 
@@ -1951,10 +1647,6 @@ export default function RoomPage() {
     setConfirmLeaveOpen(true);
   }, []);
 
-  /**
-   * Guest confirms from the intermediate kicked/ended screen.
-   * Then navigates to /.
-   */
   const handleRemovedConfirm = useCallback(() => {
     disconnectingRef.current = true;
     setRemovedPhase(null);
@@ -2019,7 +1711,6 @@ export default function RoomPage() {
     [copyText],
   );
 
-  /* Share button -> opens the WhatsApp / Facebook / Telegram ... window */
   const handleShare = useCallback(() => {
     setShowShare(true);
   }, []);
@@ -2137,7 +1828,6 @@ export default function RoomPage() {
     )}`;
   }, [inviteUrl]);
 
-  /* Close QR on outside click / Escape */
   useEffect(() => {
     if (!showQr) return;
 
@@ -2220,9 +1910,6 @@ export default function RoomPage() {
     (file) => file.status === 'failed' || file.status === 'error',
   );
 
-  /* ------------------------------------------------------------------------ */
-  /* Toast when a new incoming file offer arrives                             */
-  /* ------------------------------------------------------------------------ */
   useEffect(() => {
     if (!incoming.length) return;
 
@@ -2251,18 +1938,16 @@ export default function RoomPage() {
 
     if (offers.length === 1) {
       const f = offers[0];
-      toast.success(
-        `Incoming file: ${f.name || 'Unnamed file'} (${formatBytes(
-          f.size || 0,
-        )})`,
-      );
+      setIncomingOfferToast(f);
     } else if (offers.length > 1) {
       const total = offers.reduce((s, f) => s + Number(f.size || 0), 0);
-      toast.success(
-        `${offers.length} incoming files (${formatBytes(
-          total,
-        )}) waiting for approval`,
-      );
+      setIncomingOfferToast({
+        fileId: offers[0].fileId || offers[0].id,
+        name: `${offers.length} files are waiting`,
+        size: total,
+        multiple: true,
+        count: offers.length,
+      });
     }
 
     if (autoStarted.length === 1) {
@@ -2367,15 +2052,12 @@ export default function RoomPage() {
     }
   }, []);
 
-  // FileRow sends 'incoming' / 'outgoing', the hook expects 'in' / 'out'
   const handleRemove = useCallback((fileId, direction) => {
     if (!fileId) return;
     const dir = direction === 'incoming' || direction === 'in' ? 'in' : 'out';
     transferRef.current?.removeFile?.(fileId, dir);
   }, []);
 
-  // The transfer hook may mutate its file arrays in place. Keep this list
-  // derived on every render so newly sent/received files always appear.
   const allRoomFiles = [
     ...incoming.map((file) => ({ ...file, __direction: 'incoming' })),
     ...outgoing.map((file) => ({ ...file, __direction: 'outgoing' })),
@@ -2458,21 +2140,6 @@ export default function RoomPage() {
   }, []);
 
   const clearSelection = useCallback(() => setSelectedFiles(new Set()), []);
-
-  const toggleSelectAllVisible = useCallback(() => {
-    setSelectedFiles((current) => {
-      const next = new Set(current);
-      const visibleIds = filteredRoomFiles.map((file) => file.fileId || file.id).filter(Boolean);
-      const everySelected = visibleIds.length > 0 && visibleIds.every((id) => next.has(id));
-
-      visibleIds.forEach((id) => {
-        if (everySelected) next.delete(id);
-        else next.add(id);
-      });
-
-      return next;
-    });
-  }, [filteredRoomFiles]);
 
   const handleBulkDownload = useCallback(() => {
     if (!selectedIncomingCompleted.length) {
@@ -2652,7 +2319,6 @@ export default function RoomPage() {
     return '—';
   }, [expiresAt, createdAt]);
 
-  // Direction of the peer radar bubbles: 'out' | 'in' | 'both' | null
   const radarFlow = useMemo(() => {
     const sending = activeOutgoing.length > 0;
     const receiving = activeIncoming.length > 0;
@@ -2674,9 +2340,6 @@ export default function RoomPage() {
     peer?.deviceName || '',
   );
 
-  /* ---------------------------------------------------------------------- */
-  /* Intermediate phase for kicked / ended guests                           */
-  /* ---------------------------------------------------------------------- */
   if (removedPhase) {
     return (
       <KickedModal
@@ -2982,7 +2645,7 @@ export default function RoomPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {/* Sidebar toggle: visible on all screen sizes */}
+              {/* Sidebar toggle: now visible on ALL screen sizes (lg and up) */}
               <button
                 type="button"
                 onClick={sidebar.toggleCollapsed}
@@ -2991,7 +2654,7 @@ export default function RoomPage() {
                 title={
                   sidebar.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'
                 }
-                className="hidden xl:inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#0f1115] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
+                className="hidden lg:inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#0f1115] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
               >
                 {sidebar.sidebarCollapsed ? (
                   <PanelLeftOpen size={14} />
@@ -3031,7 +2694,6 @@ export default function RoomPage() {
                 Share
               </button>
 
-              {/* QR dropdown — after Share */}
               <div className="relative">
                 <button
                   type="button"
@@ -3217,11 +2879,15 @@ export default function RoomPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full min-w-0 max-w-[1400px] overflow-x-clip px-3 pb-24 pt-4 sm:px-6 sm:pb-8 sm:pt-6 lg:pl-8 lg:pr-24">
         <ResizableSidebarLayout
           controller={sidebar}
+          sidebarPosition="right"
           sidebar={
-            <aside className="min-h-0 space-y-5">
+            <aside
+              id="app-sidebar"
+              className="min-w-0 min-h-0 space-y-3"
+            >
               <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#0f1115]">
                 <div className="border-b border-slate-100 px-5 py-4 dark:border-slate-800">
                   <div className="flex items-center justify-between">
@@ -3643,83 +3309,238 @@ export default function RoomPage() {
                 )}
               </div>
 
-              {/* RECEIVED CATEGORY */}
-              <div className="overflow-hidden rounded-3xl border border-blue-200/70 bg-white shadow-sm dark:border-blue-500/20 dark:bg-[#0f1115]">
-                <div className="border-b border-blue-100 bg-gradient-to-r from-blue-50/80 via-white to-emerald-50/50 p-5 dark:border-blue-500/10 dark:from-blue-500/[0.08] dark:via-[#0f1115] dark:to-emerald-500/[0.04] sm:p-6">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-                        <ArrowDownToLine size={20} />
+              {/* ============================
+                  RECEIVED SECTION
+              ============================ */}
+              <div
+                id="webdrop-receive-files"
+                className="min-w-0 scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-3xl dark:border-slate-800 dark:bg-[#0f1115]"
+              >
+                {/* Header */}
+                <div className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-br from-sky-50 via-blue-50/40 to-white p-5 dark:border-slate-800 dark:from-blue-500/[0.08] dark:via-slate-900/50 dark:to-[#0f1115] sm:p-6">
+                  <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-500/10" />
+
+                  <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-sky-600 shadow-lg shadow-blue-500/25">
+                        <Inbox size={24} strokeWidth={2.4} className="text-white" />
+                        {pendingIncoming.length > 0 && (
+                          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[10px] font-extrabold text-white shadow-md dark:border-[#0f1115]">
+                            {pendingIncoming.length}
+                          </span>
+                        )}
                       </div>
+
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Received</h3>
-                          <span className="rounded-full bg-blue-100 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
-                            {incoming.length} files
+                          <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                            Received Files
+                          </h3>
+                          <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-[10px] font-extrabold text-white shadow-sm">
+                            {incoming.length}
                           </span>
-                          {activeIncoming.length > 0 && <span className="rounded-full bg-blue-100 px-2 py-1 text-[9px] font-extrabold text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">{activeIncoming.length} receiving</span>}
-                          {pendingIncoming.length > 0 && <span className="rounded-full bg-amber-100 px-2 py-1 text-[9px] font-extrabold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">{pendingIncoming.length} waiting</span>}
                         </div>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Files sent by the other device to you.</p>
+
+                        <p className="mt-1.5 max-w-xl text-xs leading-5 text-slate-600 dark:text-slate-400">
+                          Files the other device sent to you. Review, approve, and download them here — nothing is stored on the server.
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                          {activeIncoming.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-extrabold text-blue-700 ring-1 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-500/20">
+                              <span className="relative flex h-1.5 w-1.5">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-500 opacity-75" />
+                                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-blue-600" />
+                              </span>
+                              {activeIncoming.length} receiving
+                            </span>
+                          )}
+                          {pendingIncoming.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-extrabold text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/20">
+                              <Clock size={10} strokeWidth={2.8} />
+                              {pendingIncoming.length} awaiting approval
+                            </span>
+                          )}
+                          {completedIncoming.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/20">
+                              <CheckCircle size={10} strokeWidth={2.8} />
+                              {completedIncoming.length} ready
+                            </span>
+                          )}
+                          {failedIncoming.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-extrabold text-red-700 ring-1 ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/20">
+                              <AlertCircle size={10} strokeWidth={2.8} />
+                              {failedIncoming.length} failed
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      {pendingIncoming.length > 0 && <button type="button" onClick={handleAcceptAll} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-blue-600 px-3 text-[10px] font-bold text-white shadow-sm hover:bg-blue-700"><CheckCircle size={13} /> Accept all</button>}
-                      {pendingIncoming.length > 0 && <button type="button" onClick={handleRejectAll} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><XCircle size={13} /> Reject all</button>}
-                      {completedIncoming.length > 0 && <button type="button" onClick={handleDownloadAllCompleted} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 text-[10px] font-bold text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-500/10 dark:text-emerald-400"><DownloadCloud size={13} /> Download all</button>}
+                    <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
+                      {pendingIncoming.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleAcceptAll}
+                            className="inline-flex h-10 items-center gap-2 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 px-4 text-[11px] font-extrabold text-white shadow-md shadow-blue-600/25 transition hover:shadow-lg hover:shadow-blue-600/30 active:scale-[0.97]"
+                          >
+                            <CheckCircle size={14} strokeWidth={2.6} />
+                            Accept all
+                            <span className="rounded-full bg-white/25 px-1.5 py-0.5 text-[9px] font-extrabold">
+                              {pendingIncoming.length}
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleRejectAll}
+                            className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-bold text-slate-600 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-[0.97] dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-red-900/50 dark:hover:bg-red-500/10"
+                          >
+                            <XCircle size={14} />
+                            Reject all
+                          </button>
+                        </>
+                      )}
+                      {completedIncoming.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleDownloadAllCompleted}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100 px-4 text-[11px] font-extrabold text-emerald-700 shadow-sm transition hover:shadow-md active:scale-[0.97] dark:border-emerald-500/30 dark:from-emerald-500/15 dark:to-emerald-500/10 dark:text-emerald-400"
+                        >
+                          <DownloadCloud size={14} strokeWidth={2.4} />
+                          Download all
+                          <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+                            {completedIncoming.length}
+                          </span>
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Received</p>
-                      <p className="mt-1 truncate text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalIncomingReceived)}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Data received</p>
+                  <div className="relative mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-blue-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Data received
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
+                          <HardDrive size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 truncate text-base font-extrabold text-slate-900 dark:text-white">
+                        {formatBytes(totalIncomingReceived)}
+                      </p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Completed</p>
-                      <p className="mt-1 text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{completedIncoming.length}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Ready to download</p>
+
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-emerald-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Ready
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                          <CheckCircle size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                        {completedIncoming.length}
+                      </p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Waiting</p>
-                      <p className="mt-1 text-sm font-extrabold text-amber-600 dark:text-amber-400">{pendingIncoming.length}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Needs approval</p>
+
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-amber-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Awaiting
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                          <Clock size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-base font-extrabold text-amber-600 dark:text-amber-400">
+                        {pendingIncoming.length}
+                      </p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-blue-100 bg-white/80 p-3 dark:border-blue-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Failed</p>
-                      <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">{failedIncoming.length}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Transfer errors</p>
+
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-red-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Failed
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                          <AlertCircle size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-base font-extrabold text-red-600 dark:text-red-400">
+                        {failedIncoming.length}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => {
+                {/* Toolbar */}
+                <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50/50 px-5 py-3 dark:border-slate-800 dark:bg-slate-900/30 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
                         const ids = filteredIncomingFiles.map((file) => file.fileId || file.id).filter(Boolean);
                         setSelectedFiles((current) => {
                           const next = new Set(current);
                           const every = ids.length > 0 && ids.every((id) => next.has(id));
-                          ids.forEach((id) => every ? next.delete(id) : next.add(id));
+                          ids.forEach((id) => (every ? next.delete(id) : next.add(id)));
                           return next;
                         });
-                      }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300">
-                        {filteredIncomingFiles.length > 0 && filteredIncomingFiles.every((file) => selectedFiles.has(file.fileId || file.id)) ? <CheckSquare size={12} /> : <Square size={12} />}
-                        Select received
+                      }}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 shadow-sm transition hover:border-blue-300 hover:text-blue-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                    >
+                      {filteredIncomingFiles.length > 0 &&
+                      filteredIncomingFiles.every((file) => selectedFiles.has(file.fileId || file.id)) ? (
+                        <CheckSquare size={12} className="text-blue-600" />
+                      ) : (
+                        <Square size={12} />
+                      )}
+                      Select all
+                    </button>
+
+                    <span className="rounded-md bg-white px-2 py-1 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                      Showing {filteredIncomingFiles.length} of {incoming.length}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {failedIncoming.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleRetryAllFailedIncoming}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-[10px] font-bold text-red-600 shadow-sm transition hover:bg-red-50 dark:border-red-900/50 dark:bg-[#15171d] dark:text-red-400"
+                      >
+                        <RotateCcw size={12} />
+                        Retry failed
                       </button>
-                      <span className="text-[10px] font-semibold text-slate-400">Showing {filteredIncomingFiles.length} of {incoming.length}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {failedIncoming.length > 0 && <button type="button" onClick={handleRetryAllFailedIncoming} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 text-[10px] font-bold text-red-600 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400"><RotateCcw size={12} /> Retry failed</button>}
-                      {(failedIncoming.length + cancelledIncoming.length) > 0 && <button type="button" onClick={handleClearCancelledIncoming} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><Eraser size={12} /> Clear errors</button>}
-                      {completedIncoming.length > 0 && <button type="button" onClick={handleClearCompletedIncoming} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><CheckCircle size={12} /> Clear completed</button>}
-                    </div>
+                    )}
+                    {failedIncoming.length + cancelledIncoming.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearCancelledIncoming}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                      >
+                        <Eraser size={12} />
+                        Clear errors
+                      </button>
+                    )}
+                    {completedIncoming.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearCompletedIncoming}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                      >
+                        <CheckCircle size={12} />
+                        Clear completed
+                      </button>
+                    )}
                   </div>
                 </div>
 
+                {/* Body */}
                 <div className="p-4 sm:p-5">
                   {filteredIncomingFiles.length === 0 ? (
                     <EmptyQueue type="incoming" />
@@ -3747,80 +3568,199 @@ export default function RoomPage() {
                 </div>
               </div>
 
-              {/* SENT CATEGORY */}
-              <div className="overflow-hidden rounded-3xl border border-violet-200/70 bg-white shadow-sm dark:border-violet-500/20 dark:bg-[#0f1115]">
-                <div className="border-b border-violet-100 bg-gradient-to-r from-violet-50/80 via-white to-fuchsia-50/50 p-5 dark:border-violet-500/10 dark:from-violet-500/[0.08] dark:via-[#0f1115] dark:to-fuchsia-500/[0.04] sm:p-6">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
-                        <ArrowUpFromLine size={20} />
+              {/* ============================
+                  SENT SECTION
+              ============================ */}
+              <div
+                id="webdrop-send-files"
+                className="min-w-0 scroll-mt-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:rounded-3xl dark:border-slate-800 dark:bg-[#0f1115]"
+              >
+                {/* Header */}
+                <div className="relative overflow-hidden border-b border-slate-100 bg-gradient-to-br from-violet-50 via-fuchsia-50/40 to-white p-5 dark:border-slate-800 dark:from-violet-500/[0.08] dark:via-slate-900/50 dark:to-[#0f1115] sm:p-6">
+                  <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-violet-400/10 blur-3xl dark:bg-violet-500/10" />
+
+                  <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="flex min-w-0 items-start gap-4">
+                      <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-lg shadow-violet-500/25">
+                        <CloudUpload size={24} strokeWidth={2.4} className="text-white" />
+                        {failedOutgoing.length > 0 && (
+                          <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-extrabold text-white shadow-md dark:border-[#0f1115]">
+                            {failedOutgoing.length}
+                          </span>
+                        )}
                       </div>
+
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-extrabold text-slate-900 dark:text-white">Sent</h3>
-                          <span className="rounded-full bg-violet-100 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">
-                            {outgoing.length} files
+                          <h3 className="text-xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                            Sent Files
+                          </h3>
+                          <span className="rounded-full bg-violet-600 px-2.5 py-0.5 text-[10px] font-extrabold text-white shadow-sm">
+                            {outgoing.length}
                           </span>
-                          {activeOutgoing.length > 0 && <span className="rounded-full bg-violet-100 px-2 py-1 text-[9px] font-extrabold text-violet-700 dark:bg-violet-500/10 dark:text-violet-400">{activeOutgoing.length} sending</span>}
-                          {completedOutgoing.length > 0 && <span className="rounded-full bg-emerald-100 px-2 py-1 text-[9px] font-extrabold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">{completedOutgoing.length} delivered</span>}
                         </div>
-                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Files you have transferred to the other device.</p>
+
+                        <p className="mt-1.5 max-w-xl text-xs leading-5 text-slate-600 dark:text-slate-400">
+                          Files you have transferred to the other device. Track delivery in real time and retry any failures.
+                        </p>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                          {activeOutgoing.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-violet-100 px-2.5 py-1 text-[10px] font-extrabold text-violet-700 ring-1 ring-violet-200 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-500/20">
+                              <span className="relative flex h-1.5 w-1.5">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-500 opacity-75" />
+                                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-violet-600" />
+                              </span>
+                              {activeOutgoing.length} sending
+                            </span>
+                          )}
+                          {completedOutgoing.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-extrabold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/20">
+                              <CheckCircle size={10} strokeWidth={2.8} />
+                              {completedOutgoing.length} delivered
+                            </span>
+                          )}
+                          {failedOutgoing.length > 0 && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-[10px] font-extrabold text-red-700 ring-1 ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/20">
+                              <AlertCircle size={10} strokeWidth={2.8} />
+                              {failedOutgoing.length} failed
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      {failedOutgoing.length > 0 && <button type="button" onClick={handleRetryAllFailedOutgoing} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-[10px] font-bold text-red-600 dark:border-red-900/50 dark:bg-red-500/10 dark:text-red-400"><RotateCcw size={13} /> Retry failed</button>}
-                      {completedOutgoing.length > 0 && <button type="button" onClick={handleClearCompletedOutgoing} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><CheckCircle size={13} /> Clear completed</button>}
+                    <div className="flex flex-wrap items-center gap-2 xl:shrink-0">
+                      {failedOutgoing.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleRetryAllFailedOutgoing}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-300 bg-gradient-to-br from-red-50 to-red-100 px-4 text-[11px] font-extrabold text-red-700 shadow-sm transition hover:shadow-md active:scale-[0.97] dark:border-red-500/30 dark:from-red-500/15 dark:to-red-500/10 dark:text-red-400"
+                        >
+                          <RotateCcw size={14} strokeWidth={2.6} />
+                          Retry failed
+                          <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[9px] font-extrabold text-white">
+                            {failedOutgoing.length}
+                          </span>
+                        </button>
+                      )}
+                      {completedOutgoing.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleClearCompletedOutgoing}
+                          className="inline-flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[11px] font-bold text-slate-600 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600 active:scale-[0.97] dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:bg-violet-500/10"
+                        >
+                          <CheckCircle size={14} />
+                          Clear delivered
+                        </button>
+                      )}
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sent</p>
-                      <p className="mt-1 truncate text-sm font-extrabold text-slate-900 dark:text-white">{formatBytes(totalOutgoingSent)}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Data transferred</p>
+                  <div className="relative mt-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-violet-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Data sent
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                          <HardDrive size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 truncate text-base font-extrabold text-slate-900 dark:text-white">
+                        {formatBytes(totalOutgoingSent)}
+                      </p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Delivered</p>
-                      <p className="mt-1 text-sm font-extrabold text-emerald-600 dark:text-emerald-400">{completedOutgoing.length}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Completed transfers</p>
+
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-emerald-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Delivered
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                          <CheckCircle size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                        {completedOutgoing.length}
+                      </p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Sending</p>
-                      <p className="mt-1 text-sm font-extrabold text-violet-600 dark:text-violet-400">{activeOutgoing.length}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Live transfers</p>
+
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-violet-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Sending
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                          <Zap size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-base font-extrabold text-violet-600 dark:text-violet-400">
+                        {activeOutgoing.length}
+                      </p>
                     </div>
-                    <div className="min-w-0 rounded-xl border border-violet-100 bg-white/80 p-3 dark:border-violet-500/10 dark:bg-[#15171d]">
-                      <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">Failed</p>
-                      <p className="mt-1 text-sm font-extrabold text-red-600 dark:text-red-400">{failedOutgoing.length}</p>
-                      <p className="mt-0.5 text-[9px] text-slate-400">Transfer errors</p>
+
+                    <div className="group rounded-xl border border-slate-200 bg-white p-3 transition hover:border-red-200 hover:shadow-sm dark:border-slate-800 dark:bg-[#15171d]">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                          Failed
+                        </p>
+                        <span className="flex h-5 w-5 items-center justify-center rounded-md bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400">
+                          <AlertCircle size={11} />
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-base font-extrabold text-red-600 dark:text-red-400">
+                        {failedOutgoing.length}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="border-b border-slate-100 px-5 py-3 dark:border-slate-800">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => {
+                {/* Toolbar */}
+                <div className="flex flex-col gap-2 border-b border-slate-100 bg-slate-50/50 px-5 py-3 dark:border-slate-800 dark:bg-slate-900/30 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
                         const ids = filteredOutgoingFiles.map((file) => file.fileId || file.id).filter(Boolean);
                         setSelectedFiles((current) => {
                           const next = new Set(current);
                           const every = ids.length > 0 && ids.every((id) => next.has(id));
-                          ids.forEach((id) => every ? next.delete(id) : next.add(id));
+                          ids.forEach((id) => (every ? next.delete(id) : next.add(id)));
                           return next;
                         });
-                      }} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300">
-                        {filteredOutgoingFiles.length > 0 && filteredOutgoingFiles.every((file) => selectedFiles.has(file.fileId || file.id)) ? <CheckSquare size={12} /> : <Square size={12} />}
-                        Select sent
+                      }}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                    >
+                      {filteredOutgoingFiles.length > 0 &&
+                      filteredOutgoingFiles.every((file) => selectedFiles.has(file.fileId || file.id)) ? (
+                        <CheckSquare size={12} className="text-violet-600" />
+                      ) : (
+                        <Square size={12} />
+                      )}
+                      Select all
+                    </button>
+
+                    <span className="rounded-md bg-white px-2 py-1 text-[10px] font-semibold text-slate-500 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700">
+                      Showing {filteredOutgoingFiles.length} of {outgoing.length}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {failedOutgoing.length + cancelledOutgoing.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearCancelledOutgoing}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+                      >
+                        <Eraser size={12} />
+                        Clear errors
                       </button>
-                      <span className="text-[10px] font-semibold text-slate-400">Showing {filteredOutgoingFiles.length} of {outgoing.length}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {(failedOutgoing.length + cancelledOutgoing.length) > 0 && <button type="button" onClick={handleClearCancelledOutgoing} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] font-bold text-slate-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"><Eraser size={12} /> Clear errors</button>}
-                    </div>
+                    )}
                   </div>
                 </div>
 
+                {/* Body */}
                 <div className="p-4 sm:p-5">
                   {filteredOutgoingFiles.length === 0 ? (
                     <EmptyQueue type="outgoing" onShare={() => fileInputRef.current?.click()} />
@@ -4232,7 +4172,226 @@ export default function RoomPage() {
         </ResizableSidebarLayout>
       </main>
 
-      {/* Share window: WhatsApp, Facebook, Telegram, X, LinkedIn, Email, SMS, Copy */}
+      {/* Premium desktop Quick Access Dock — RIGHT edge */}
+      <nav
+        aria-label="Desktop transfer shortcuts"
+        className="fixed right-3 top-1/2 z-[130] hidden -translate-y-1/2 flex-col gap-2 rounded-[26px] border border-white/80 bg-white/80 p-2 shadow-[0_16px_48px_rgba(48,35,90,0.18)] backdrop-blur-2xl lg:flex dark:border-white/10 dark:bg-[#151520]/85"
+      >
+        <button
+          type="button"
+          onClick={() => document.getElementById('webdrop-send-files')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          title="Go to Send files"
+          className="group relative flex h-[66px] w-[66px] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[19px] border border-violet-400/20 bg-gradient-to-br from-violet-600 via-violet-600 to-indigo-600 text-white shadow-[0_8px_20px_rgba(109,40,217,0.28)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_26px_rgba(109,40,217,0.36)] active:scale-[0.96]"
+        >
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-transparent opacity-80" />
+          <CloudUpload size={19} strokeWidth={2.4} className="relative" />
+          <span className="relative text-[11px] font-extrabold tracking-wide">Send</span>
+          {outgoing.length > 0 && (
+            <span className="absolute right-1.5 top-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full border border-white/25 bg-white/20 px-1 text-[9px] font-extrabold text-white">
+              {outgoing.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => document.getElementById('webdrop-receive-files')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          title="Go to Received files"
+          className="group relative flex h-[66px] w-[66px] flex-col items-center justify-center gap-1.5 overflow-hidden rounded-[19px] border border-sky-300/60 bg-gradient-to-br from-white via-sky-50 to-indigo-50 text-slate-800 shadow-[0_6px_18px_rgba(59,130,246,0.12)] transition duration-200 hover:-translate-y-0.5 hover:border-sky-400 hover:shadow-[0_10px_24px_rgba(59,130,246,0.2)] active:scale-[0.96] dark:border-sky-400/20 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950 dark:text-white"
+        >
+          <Inbox size={19} strokeWidth={2.4} className="text-sky-600 dark:text-sky-300" />
+          <span className="text-[11px] font-extrabold tracking-wide">Receive</span>
+          {incoming.length > 0 && (
+            <span className="absolute right-1.5 top-1.5 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-sky-600 px-1 text-[9px] font-extrabold text-white dark:bg-sky-500">
+              {incoming.length}
+            </span>
+          )}
+          {pendingIncoming.length > 0 && (
+            <span className="absolute -left-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-rose-500 dark:border-slate-900" />
+          )}
+        </button>
+
+        <span className="mx-auto h-px w-8 bg-slate-200 dark:bg-slate-700" />
+
+        <button
+          type="button"
+          disabled={!connected}
+          onClick={() => fileInputRef.current?.click()}
+          title="Quick send files"
+          className="group relative flex h-[52px] w-[66px] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-[16px] border border-slate-200 bg-white text-slate-600 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:text-violet-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
+        >
+          <Plus size={16} strokeWidth={2.6} />
+          <span className="text-[9px] font-extrabold tracking-wide">Add</span>
+        </button>
+
+        <button
+          type="button"
+          disabled={!connected}
+          onClick={() => folderInputRef.current?.click()}
+          title="Quick send folder"
+          className="group relative flex h-[52px] w-[66px] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-[16px] border border-slate-200 bg-white text-slate-600 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:text-violet-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
+        >
+          <FolderOpen size={16} strokeWidth={2.4} />
+          <span className="text-[9px] font-extrabold tracking-wide">Folder</span>
+        </button>
+
+        <span className="mx-auto h-px w-8 bg-slate-200 dark:bg-slate-700" />
+
+        {pendingIncoming.length > 0 && (
+          <button
+            type="button"
+            onClick={handleAcceptAll}
+            title={`Accept all ${pendingIncoming.length} incoming files`}
+            className="group relative flex h-[52px] w-[66px] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-[16px] border border-emerald-300 bg-emerald-50 text-emerald-700 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400"
+          >
+            <CheckCircle size={16} strokeWidth={2.6} />
+            <span className="text-[9px] font-extrabold tracking-wide">Accept</span>
+            <span className="absolute right-1 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-emerald-600 px-1 text-[8px] font-extrabold text-white">
+              {pendingIncoming.length}
+            </span>
+          </button>
+        )}
+
+        {completedIncoming.length > 0 && (
+          <button
+            type="button"
+            onClick={handleDownloadAllCompleted}
+            title={`Download all ${completedIncoming.length} completed files`}
+            className="group relative flex h-[52px] w-[66px] flex-col items-center justify-center gap-0.5 overflow-hidden rounded-[16px] border border-blue-300 bg-blue-50 text-blue-700 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400"
+          >
+            <DownloadCloud size={16} strokeWidth={2.4} />
+            <span className="text-[9px] font-extrabold tracking-wide">Save</span>
+            <span className="absolute right-1 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-blue-600 px-1 text-[8px] font-extrabold text-white">
+              {completedIncoming.length}
+            </span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          title="Back to top"
+          aria-label="Back to top"
+          className="group relative flex h-[40px] w-[66px] items-center justify-center overflow-hidden rounded-[14px] border border-slate-200 bg-white text-slate-500 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-violet-300 hover:text-violet-600 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-400 dark:hover:border-violet-500/50 dark:hover:text-violet-400"
+        >
+          <ChevronDown size={15} className="rotate-180" strokeWidth={2.6} />
+        </button>
+      </nav>
+
+      {/* Liquid-glass quick navigation for phones */}
+      <nav
+        aria-label="File transfer quick navigation"
+        className="fixed inset-x-3 bottom-[max(10px,env(safe-area-inset-bottom))] z-[120] mx-auto w-auto max-w-[420px] rounded-[24px] border border-white/90 bg-white/90 p-2 shadow-[0_12px_34px_rgba(35,25,75,0.20)] backdrop-blur-2xl supports-[backdrop-filter]:bg-white/80 sm:inset-x-4 sm:bottom-4 sm:max-w-[440px] dark:border-white/10 dark:bg-[#11121a]/90 dark:supports-[backdrop-filter]:bg-[#11121a]/80 lg:hidden"
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => document.getElementById('webdrop-send-files')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="group relative flex min-h-[52px] min-w-0 items-center justify-center gap-2 rounded-[16px] border border-violet-400/20 bg-gradient-to-br from-violet-600 via-violet-600 to-indigo-600 px-2.5 text-white shadow-[0_5px_14px_rgba(109,40,217,0.24)] transition duration-200 hover:shadow-[0_8px_20px_rgba(109,40,217,0.30)] active:scale-[0.97]"
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/15 shadow-inner">
+              <CloudUpload size={17} strokeWidth={2.3} />
+            </span>
+            <span className="min-w-0 text-left">
+              <span className="block text-[13px] font-extrabold leading-4 tracking-wide">Send</span>
+              <span className="block text-[10px] font-medium text-white/75">{outgoing.length} files</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => document.getElementById('webdrop-receive-files')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            className="group relative flex min-h-[52px] min-w-0 items-center justify-center gap-2 rounded-[16px] border border-sky-200/80 bg-gradient-to-br from-white via-sky-50/90 to-indigo-50/80 px-2.5 text-slate-800 shadow-[0_4px_13px_rgba(59,130,246,0.09)] transition duration-200 hover:border-sky-300 hover:shadow-[0_7px_18px_rgba(59,130,246,0.14)] active:scale-[0.97] dark:border-white/10 dark:from-slate-900 dark:via-slate-900 dark:to-indigo-950 dark:text-white"
+          >
+            <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-100 bg-sky-100/80 text-sky-700 dark:border-sky-400/10 dark:bg-sky-400/10 dark:text-sky-300">
+              <Inbox size={17} strokeWidth={2.3} />
+              {pendingIncoming.length > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[9px] font-extrabold text-white dark:border-[#11121a]">
+                  {pendingIncoming.length}
+                </span>
+              )}
+            </span>
+            <span className="min-w-0 text-left">
+              <span className="block text-[13px] font-extrabold leading-4 tracking-wide">Receive</span>
+              <span className="block text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                {pendingIncoming.length ? `${pendingIncoming.length} waiting` : `${incoming.length} files`}
+              </span>
+            </span>
+          </button>
+        </div>
+
+        <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            type="button"
+            disabled={!connected}
+            onClick={() => fileInputRef.current?.click()}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 active:scale-[0.96] disabled:opacity-40 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+          >
+            <Plus size={13} strokeWidth={2.6} />
+            Add files
+          </button>
+
+          <button
+            type="button"
+            disabled={!connected}
+            onClick={() => folderInputRef.current?.click()}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 active:scale-[0.96] disabled:opacity-40 dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+          >
+            <FolderOpen size={13} strokeWidth={2.4} />
+            Folder
+          </button>
+
+          {pendingIncoming.length > 0 && (
+            <button
+              type="button"
+              onClick={handleAcceptAll}
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-emerald-300 bg-emerald-50 px-3 text-[11px] font-bold text-emerald-700 shadow-sm transition hover:bg-emerald-100 active:scale-[0.96] dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400"
+            >
+              <CheckCircle size={13} strokeWidth={2.6} />
+              Accept {pendingIncoming.length}
+            </button>
+          )}
+
+          {completedIncoming.length > 0 && (
+            <button
+              type="button"
+              onClick={handleDownloadAllCompleted}
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-blue-300 bg-blue-50 px-3 text-[11px] font-bold text-blue-700 shadow-sm transition hover:bg-blue-100 active:scale-[0.96] dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400"
+            >
+              <DownloadCloud size={13} strokeWidth={2.4} />
+              Save all
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleShare}
+            className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-[11px] font-bold text-slate-600 shadow-sm transition hover:border-violet-300 hover:text-violet-600 active:scale-[0.96] dark:border-slate-700 dark:bg-[#15171d] dark:text-slate-300"
+          >
+            <Share2 size={13} strokeWidth={2.4} />
+            Invite
+          </button>
+        </div>
+      </nav>
+
+      {/* Actionable incoming-file toast */}
+      {incomingOfferToast && (
+        <div role="status" className="fixed right-2 top-[max(8px,env(safe-area-inset-top))] z-[250] w-[min(340px,calc(100vw-1rem))] overflow-hidden rounded-[20px] border border-white/85 bg-white/92 p-3 shadow-[0_14px_42px_rgba(35,25,75,0.24)] backdrop-blur-2xl animate-in slide-in-from-top-2 fade-in duration-200 sm:right-4 sm:top-[max(16px,env(safe-area-inset-top))] sm:w-[min(360px,calc(100vw-2rem))] sm:rounded-3xl sm:p-4 dark:border-white/10 dark:bg-[#171722]/95">
+          <div className="flex min-w-0 items-start gap-2.5 sm:gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-500 text-white shadow-md shadow-violet-500/20 sm:h-11 sm:w-11 sm:rounded-2xl"><Inbox size={17} /></div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2"><p className="text-sm font-extrabold text-slate-900 dark:text-white">Incoming file{incomingOfferToast.multiple ? 's' : ''}</p><button type="button" onClick={() => setIncomingOfferToast(null)} className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10" aria-label="Dismiss incoming file notification"><X size={15} /></button></div>
+              <p className="mt-1 truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{incomingOfferToast.name || 'A file is ready to send'}</p>
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{formatBytes(incomingOfferToast.size || 0)} · Waiting for your approval</p>
+              <div className="mt-2.5 flex gap-2 sm:mt-3">
+                <button type="button" onClick={() => { if (incomingOfferToast.multiple) { handleAcceptAll(); } else { handleAccept(incomingOfferToast.fileId); } setIncomingOfferToast(null); }} className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-2.5 text-[11px] font-extrabold text-white shadow-md shadow-violet-600/20 transition hover:brightness-110 active:scale-[0.98] sm:px-3 sm:text-xs"><CheckCircle size={14} />Accept{incomingOfferToast.multiple ? ' all' : ''}</button>
+                <button type="button" onClick={() => { if (incomingOfferToast.multiple) { pendingIncoming.forEach((file) => handleReject(file.fileId || file.id)); } else { handleReject(incomingOfferToast.fileId); } setIncomingOfferToast(null); }} className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white/70 px-2.5 text-[11px] font-bold text-slate-600 transition hover:bg-slate-50 sm:px-3 sm:text-xs dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-300 dark:hover:bg-white/10"><X size={14} />Decline</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ShareModal
         open={showShare}
         onClose={() => setShowShare(false)}

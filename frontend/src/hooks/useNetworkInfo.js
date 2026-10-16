@@ -1,83 +1,86 @@
+
 import { useEffect, useState } from 'react';
 
-/**
- * Real-time network info (type + estimated signal bars).
- *
- * Connection type comes from, in order:
- *  1. navigator.connection.type   (Chrome on Android)
- *  2. WebRTC local-candidate stats `networkType` (Chrome/Edge desktop:
- *     'wifi' | 'ethernet' | 'cellular')
- *  3. Fallback: 'unknown' (UI shows the Wi-Fi icon)
- *
- * Browsers cannot read the real radio signal (dBm), so the bars are
- * estimated from rtt + downlink (or effectiveType as a fallback).
- */
-
 const QUALITY = ['No signal', 'Weak', 'Fair', 'Good', 'Excellent'];
+
 const KIND_LABELS = {
   wifi: 'Wi-Fi',
   cellular: 'Mobile data',
   ethernet: 'Ethernet',
+  unknown: 'Wi-Fi',
+  none: 'No network',
 };
+
 const KNOWN_TYPES = ['wifi', 'ethernet', 'cellular'];
 
-const getConnection = () =>
-  typeof navigator === 'undefined'
-    ? null
-    : navigator.connection ||
-      navigator.mozConnection ||
-      navigator.webkitConnection ||
-      null;
+const getConnection = () => {
+  if (typeof navigator === 'undefined') return null;
 
-/* ---------- Connection type via WebRTC stats (desktop Chrome/Edge) ---------- */
+  return (
+    navigator.connection ||
+    navigator.mozConnection ||
+    navigator.webkitConnection ||
+    null
+  );
+};
 
+/**
+ * Best-effort network type detection.
+ * Browser support varies by device and browser version.
+ */
 async function detectTypeViaWebRTC() {
   if (typeof RTCPeerConnection === 'undefined') return null;
 
   let pc;
+
   try {
     pc = new RTCPeerConnection({ iceServers: [] });
-    pc.createDataChannel('probe');
-    await pc.setLocalDescription(await pc.createOffer());
+    pc.createDataChannel('network-probe');
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
 
     await new Promise((resolve) => {
-      if (pc.iceGatheringState === 'complete') return resolve();
-      const timer = setTimeout(resolve, 1500);
+      if (pc.iceGatheringState === 'complete') {
+        resolve();
+        return;
+      }
+
+      const timeout = setTimeout(resolve, 2000);
+
       pc.addEventListener('icegatheringstatechange', () => {
         if (pc.iceGatheringState === 'complete') {
-          clearTimeout(timer);
+          clearTimeout(timeout);
           resolve();
         }
       });
-      return undefined;
     });
 
     const stats = await pc.getStats();
-    let found = null;
+
+    let detectedType = null;
 
     stats.forEach((report) => {
       if (
-        !found &&
+        !detectedType &&
         report.type === 'local-candidate' &&
         KNOWN_TYPES.includes(report.networkType)
       ) {
-        found = report.networkType;
+        detectedType = report.networkType;
       }
     });
 
-    return found;
+    return detectedType;
   } catch {
     return null;
   } finally {
     try {
       pc?.close();
     } catch {
-      /* ignore */
+      // Ignore cleanup errors.
     }
   }
 }
-
-/* ---------- Signal bars estimate ---------- */
 
 function estimateBars({ online, effectiveType, downlink, rtt }) {
   if (!online) return 0;
@@ -85,39 +88,82 @@ function estimateBars({ online, effectiveType, downlink, rtt }) {
   const scores = [];
 
   if (typeof rtt === 'number' && rtt > 0) {
-    scores.push(rtt <= 60 ? 4 : rtt <= 150 ? 3 : rtt <= 400 ? 2 : 1);
+    scores.push(
+      rtt <= 60 ? 4 :
+      rtt <= 150 ? 3 :
+      rtt <= 400 ? 2 : 1
+    );
   }
 
   if (typeof downlink === 'number' && downlink > 0) {
-    scores.push(downlink >= 8 ? 4 : downlink >= 3 ? 3 : downlink >= 1 ? 2 : 1);
+    scores.push(
+      downlink >= 8 ? 4 :
+      downlink >= 3 ? 3 :
+      downlink >= 1 ? 2 : 1
+    );
   }
 
-  if (scores.length) {
-    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  if (scores.length > 0) {
+    return Math.round(
+      scores.reduce((total, score) => total + score, 0) /
+      scores.length
+    );
   }
 
-  const byType = { '4g': 4, '3g': 2, '2g': 1, 'slow-2g': 1 };
-  return byType[effectiveType] ?? 3;
+  const qualityByType = {
+    '4g': 4,
+    '3g': 2,
+    '2g': 1,
+    'slow-2g': 1,
+  };
+
+  return qualityByType[effectiveType] ?? 3;
 }
 
 function readNetwork(detectedType) {
   const conn = getConnection();
-  const online = typeof navigator === 'undefined' ? true : navigator.onLine;
+  const online =
+    typeof navigator === 'undefined' ? false : navigator.onLine;
 
-  const rawType = KNOWN_TYPES.includes(conn?.type) ? conn.type : detectedType;
-  const kind = !online ? 'none' : KNOWN_TYPES.includes(rawType) ? rawType : 'unknown';
+  const browserType = KNOWN_TYPES.includes(conn?.type)
+    ? conn.type
+    : null;
+
+  const detected = KNOWN_TYPES.includes(detectedType)
+    ? detectedType
+    : null;
+
+  // Prefer the browser's reported type, then WebRTC detection.
+  const actualType = browserType || detected;
+
+  /*
+   * Fallback for browsers that expose neither type.
+   * This assumes Wi-Fi for display only; it cannot verify
+   * whether the device is using Wi-Fi, mobile data, or Ethernet.
+   */
+  const kind = !online
+    ? 'none'
+    : actualType || 'unknown';
 
   const effectiveType = conn?.effectiveType;
-  const downlink = conn?.downlink;
-  const rtt = conn?.rtt;
+  const downlink =
+    typeof conn?.downlink === 'number' ? conn.downlink : undefined;
+  const rtt = typeof conn?.rtt === 'number' ? conn.rtt : undefined;
 
-  const bars = estimateBars({ online, effectiveType, downlink, rtt });
+  const bars = estimateBars({
+    online,
+    effectiveType,
+    downlink,
+    rtt,
+  });
 
   return {
     online,
     supported: Boolean(conn),
     kind,
-    label: online ? KIND_LABELS[kind] || 'Network' : 'No network',
+    label: online
+      ? KIND_LABELS[kind] || 'Wi-Fi'
+      : 'No network',
     effectiveType,
     downlink,
     rtt,
@@ -126,33 +172,44 @@ function readNetwork(detectedType) {
   };
 }
 
-const sameNetwork = (a, b) =>
-  a.online === b.online &&
-  a.kind === b.kind &&
-  a.bars === b.bars &&
-  a.rtt === b.rtt &&
-  a.downlink === b.downlink &&
-  a.effectiveType === b.effectiveType;
+function sameNetwork(a, b) {
+  return (
+    a.online === b.online &&
+    a.kind === b.kind &&
+    a.bars === b.bars &&
+    a.rtt === b.rtt &&
+    a.downlink === b.downlink &&
+    a.effectiveType === b.effectiveType
+  );
+}
 
 export default function useNetworkInfo() {
   const [detected, setDetected] = useState(null);
   const [info, setInfo] = useState(() => readNetwork(null));
 
-  /* Re-detect connection type (WebRTC) on start, on change, and every 15s */
   useEffect(() => {
     let cancelled = false;
     const conn = getConnection();
 
     const detect = async () => {
       if (!navigator.onLine) return;
-      const type = await detectTypeViaWebRTC();
-      if (!cancelled) setDetected(type);
+
+      const browserType = KNOWN_TYPES.includes(conn?.type)
+        ? conn.type
+        : null;
+
+      const webrtcType = await detectTypeViaWebRTC();
+
+      if (!cancelled) {
+        setDetected(browserType || webrtcType || null);
+      }
     };
 
     detect();
 
     window.addEventListener('online', detect);
     conn?.addEventListener?.('change', detect);
+
     const interval = setInterval(detect, 15000);
 
     return () => {
@@ -163,11 +220,12 @@ export default function useNetworkInfo() {
     };
   }, []);
 
-  /* Live rtt / downlink / online state */
   useEffect(() => {
     const update = () => {
       const next = readNetwork(detected);
-      setInfo((prev) => (sameNetwork(prev, next) ? prev : next));
+      setInfo((previous) =>
+        sameNetwork(previous, next) ? previous : next
+      );
     };
 
     const conn = getConnection();
@@ -177,6 +235,7 @@ export default function useNetworkInfo() {
     conn?.addEventListener?.('change', update);
 
     const interval = setInterval(update, 4000);
+
     update();
 
     return () => {
