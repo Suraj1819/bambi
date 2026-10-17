@@ -1,0 +1,103 @@
+{
+  "brand": {
+    "name": "WebDrop",
+    "tagline": "Drop. Connect. Transfer.",
+    "footerTagline": "Direct. Private. Fast."
+  },
+  "nav": {
+    "overview": "Overview",
+    "create": "Create room",
+    "join": "Join room",
+    "about": "About",
+    "team": "Team",
+    "source": "Source",
+    "startTransfer": "Start transfer",
+    "skipToContent": "Skip to content",
+    "homeAria": "WebDrop home",
+    "openMenu": "Open navigation menu",
+    "closeMenu": "Close navigation menu",
+    "primaryNav": "Primary navigation",
+    "mobileNav": "Mobile navigation"
+  },
+  "lang": {
+    "switchToEn": "English",
+    "switchToHi": "हिन्दी",
+    "aria": "Switch language"
+  },
+  "theme": {
+    "light": "Light mode",
+    "dark": "Dark mode",
+    "toLight": "Switch to light mode",
+    "toDark": "Switch to dark mode"
+  },
+  "room": {
+    "active": "Room active",
+    "ready": "Ready",
+    "activeShort": "Active",
+    "copyCode": "Copy room code",
+    "host": "Host",
+    "guest": "Guest",
+    "server": "Server",
+    "offline": "Offline",
+    "live": "Live"
+  },
+  "status": {
+    "serverOnline": "Server online",
+    "serverOffline": "Server offline",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "connectionOverview": "Connection overview",
+    "networkStatus": "Your current network status",
+    "signalingServer": "Signaling server",
+    "networkType": "Network type",
+    "networkQuality": "Network quality",
+    "unavailable": "Unavailable",
+    "estimatedSpeed": "Estimated speed",
+    "estimatedLatency": "Estimated latency",
+    "openDetails": "Open connection details",
+    "closeDetails": "Close connection details",
+    "peerHelp": "WebDrop transfers files directly between peers when possible. The signaling server helps devices discover and connect to each other."
+  },
+  "notifications": {
+    "title": "Recent rooms",
+    "subtitle": "Saved only on this device · {{count}} room",
+    "subtitle_plural": "Saved only on this device · {{count}} rooms",
+    "emptyTitle": "No rooms on this device",
+    "emptyBody": "Create a room or join with a code — it will appear here so you can rejoin later. Lists never sync to other phones or browsers.",
+    "footer": "Only rooms from this browser. Never shared with other devices.",
+    "clearAll": "Clear all",
+    "rejoin": "Rejoin",
+    "rejoining": "Rejoining…",
+    "refresh": "Refresh",
+    "close": "Close notifications",
+    "removeRoom": "Remove room {{code}}",
+    "removeTitle": "Remove from this device",
+    "recentAria": "Notifications and recent rooms",
+    "bellTitle": "Recent rooms on this device",
+    "recentRoomFallback": "Recent room"
+  },
+  "toast": {
+    "transferInProgress": "Transfer in progress",
+    "transferInProgressBody": "Finish or cancel your current transfer before navigating away.",
+    "codeCopied": "Room code copied",
+    "codeCopiedBody": "{{code}} is ready to share.",
+    "copyFailed": "Copy failed",
+    "copyFailedBody": "Please copy the room code manually.",
+    "rejoinUnavailable": "Rejoin unavailable",
+    "rejoinUnavailableBody": "Room rejoining is not configured yet.",
+    "serverOffline": "Server offline",
+    "serverOfflineBody": "Connect to the signaling server before rejoining.",
+    "unableRejoin": "Unable to rejoin",
+    "unableRejoinBody": "The room may have expired or be full.",
+    "roomRejoined": "Room rejoined",
+    "roomRejoinedBody": "Reconnected to room {{code}}.",
+    "rejoinFailed": "Rejoin failed",
+    "tryAgain": "Please try again.",
+    "cleared": "Cleared",
+    "clearedBody": "All recent room codes removed from this device."
+  },
+  "github": {
+    "view": "View on GitHub",
+    "aria": "View WebDrop source on GitHub"
+  }
+}

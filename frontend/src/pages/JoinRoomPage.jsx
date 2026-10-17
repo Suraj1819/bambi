@@ -1,6 +1,7 @@
 // src/pages/JoinRoom.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,8 +28,6 @@ import {
   FileCheck,
   Info,
   AlertCircle,
-  Check,
-  Copy,
 } from 'lucide-react';
 
 import { Html5Qrcode } from 'html5-qrcode';
@@ -54,90 +53,37 @@ import {
 const FOCUS_RING =
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-surface';
 
-const CAPABILITIES = [
-  {
-    icon: ShieldCheck,
-    title: 'End-to-end encrypted',
-    desc: 'Every byte travels over an encrypted WebRTC DataChannel.',
-    tone: 'emerald',
-  },
-  {
-    icon: KeyRound,
-    title: 'Code-based access',
-    desc: 'Only someone with the 5-character code can join.',
-    tone: 'violet',
-  },
-  {
-    icon: Clock3,
-    title: 'Auto-expires',
-    desc: 'Rooms close themselves after 30 minutes.',
-    tone: 'amber',
-  },
-  {
-    icon: Users,
-    title: 'Two devices only',
-    desc: 'One sender, one receiver. Nothing in between.',
-    tone: 'sky',
-  },
+const CAPABILITY_KEYS = [
+  { icon: ShieldCheck, titleKey: 'join.capE2eTitle', descKey: 'join.capE2eDesc', tone: 'emerald' },
+  { icon: KeyRound, titleKey: 'join.capCodeTitle', descKey: 'join.capCodeDesc', tone: 'violet' },
+  { icon: Clock3, titleKey: 'join.capExpireTitle', descKey: 'join.capExpireDesc', tone: 'amber' },
+  { icon: Users, titleKey: 'join.capTwoTitle', descKey: 'join.capTwoDesc', tone: 'sky' },
 ];
 
-const SPECS = [
-  { label: 'Transport', value: 'WebRTC · DTLS', icon: Server },
-  { label: 'Signaling', value: 'Socket.IO', icon: Wifi },
-  { label: 'Auth', value: 'Room code only', icon: KeyRound },
-  { label: 'Storage', value: 'Zero on server', icon: FileCheck },
+const SPEC_KEYS = [
+  { labelKey: 'join.specTransport', value: 'WebRTC · DTLS', icon: Server },
+  { labelKey: 'join.specSignaling', value: 'Socket.IO', icon: Wifi },
+  { labelKey: 'join.specAuth', valueKey: 'join.specAuthValue', icon: KeyRound },
+  { labelKey: 'join.specStorage', valueKey: 'join.specStorageValue', icon: FileCheck },
 ];
 
-const FAQS = [
-  {
-    q: 'Where do I find the room code?',
-    a: 'The sending device shows a 5-character code and a QR. Ask them to share either one with you.',
-  },
-  {
-    q: 'The code expired — what now?',
-    a: 'Rooms close automatically after 30 minutes. Ask the sender to generate a fresh room and share the new code.',
-  },
-  {
-    q: 'Someone else already joined. Can I still connect?',
-    a: 'Each room holds exactly two devices. The host can remove the other device from their room to make space for you.',
-  },
-  {
-    q: 'Why does the camera show "unavailable"?',
-    a: 'Your browser needs camera permission for scanning. You can always type the code manually instead.',
-  },
+const FAQ_KEYS = [
+  { qKey: 'join.faq1q', aKey: 'join.faq1a' },
+  { qKey: 'join.faq2q', aKey: 'join.faq2a' },
+  { qKey: 'join.faq3q', aKey: 'join.faq3a' },
+  { qKey: 'join.faq4q', aKey: 'join.faq4a' },
 ];
 
-const JOIN_STEPS = [
-  {
-    icon: KeyRound,
-    title: 'Get the code',
-    text: 'Ask the sender for the 5-character code, or the QR code shown in their room.',
-  },
-  {
-    icon: ScanLine,
-    title: 'Enter or scan it',
-    text: 'Type the code, paste it, or scan the QR with your camera.',
-  },
-  {
-    icon: ShieldCheck,
-    title: 'Connect directly',
-    text: 'Your device connects straight to the sender. Files never go through a server.',
-  },
+const JOIN_STEP_KEYS = [
+  { icon: KeyRound, titleKey: 'join.step1Title', textKey: 'join.step1Text' },
+  { icon: ScanLine, titleKey: 'join.step2Title', textKey: 'join.step2Text' },
+  { icon: ShieldCheck, titleKey: 'join.step3Title', textKey: 'join.step3Text' },
 ];
 
-const TROUBLESHOOTING = [
-  {
-    icon: Clock3,
-    text: 'Rooms expire after 30 minutes. Ask the sender for a fresh code if yours is older.',
-  },
-  {
-    icon: Users,
-    text: 'A room holds two devices. If someone else has already joined, the sender can remove them.',
-  },
-  {
-    icon: Lock,
-    text: 'The sender can lock a room. Ask them to unlock it, then try again.',
-  },
+const TROUBLE_KEYS = [
+  { icon: Clock3, textKey: 'join.trouble1' },
+  { icon: Users, textKey: 'join.trouble2' },
+  { icon: Lock, textKey: 'join.trouble3' },
 ];
 
 /* ============================================================
@@ -193,7 +139,7 @@ function ScrollToTop() {
       type="button"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
       aria-label="Scroll to top"
-      className={`fixed bottom-5 right-5 z-40 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-600 shadow-lg backdrop-blur-sm transition-colors hover:border-violet-300 hover:text-violet-600 dark:border-white/[0.1] dark:bg-[#15171d]/95 dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300 ${FOCUS_RING}`}
+      className={`fixed bottom-[max(5.5rem,calc(env(safe-area-inset-bottom)+4.5rem))] right-4 z-40 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-600 shadow-lg backdrop-blur-sm transition-colors hover:border-violet-300 hover:text-violet-600 dark:border-white/[0.1] dark:bg-[#15171d]/95 dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300 sm:right-5 lg:bottom-5 ${FOCUS_RING}`}
     >
       <ArrowUp className="h-4 w-4" strokeWidth={2.4} />
     </button>
@@ -238,6 +184,7 @@ function SectionLabel({ icon: Icon, children }) {
 ============================================================ */
 
 export default function JoinRoomPage() {
+  const { t } = useTranslation();
   const [code, setCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [joinStage, setJoinStage] = useState('');
@@ -257,12 +204,10 @@ export default function JoinRoomPage() {
   const startingScannerRef = useRef(false);
   const scanHandledRef = useRef(false);
 
-  /* Scroll top on route change */
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, []);
 
-  /* Read room code from URL */
   useEffect(() => {
     const urlCode = searchParams.get('room') || searchParams.get('code');
     if (!urlCode) return;
@@ -270,13 +215,12 @@ export default function JoinRoomPage() {
     const cleaned = normalizeRoomCode(urlCode);
     if (isValidRoomCode(cleaned)) {
       setCode(cleaned);
-      toast.info('Room code detected', `Code ${cleaned} prefilled.`);
+      toast.info(t('join.toastCodeDetected'), t('join.toastCodePrefilled', { code: cleaned }));
     } else {
-      toast.warning('Invalid code', 'Please enter the code manually.');
+      toast.warning(t('join.toastInvalidCode'), t('join.toastEnterManually'));
     }
   }, [searchParams]);
 
-  /* Start QR scanner */
   useEffect(() => {
     if (!showScanner) return;
 
@@ -340,12 +284,12 @@ export default function JoinRoomPage() {
           const noCamera = /NotFound|Overconstrained/i.test(reason);
 
           toast.error(
-            'Camera unavailable',
+            t('join.toastCameraUnavailable'),
             denied
-              ? 'Camera permission was denied. Allow it in your browser settings, or type the code instead.'
+              ? t('join.toastCameraDenied')
               : noCamera
-                ? 'No camera was found on this device. Type the code instead.'
-                : 'Could not start the camera. Please try again or type the code.',
+                ? t('join.toastNoCamera')
+                : t('join.toastCameraFail'),
           );
 
           setShowScanner(false);
@@ -360,9 +304,9 @@ export default function JoinRoomPage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showScanner]);
 
-  /* Handle QR result */
   const handleQrResult = (decodedText) => {
     if (scanHandledRef.current) return;
 
@@ -374,14 +318,13 @@ export default function JoinRoomPage() {
       setCode(cleaned);
       setError('');
 
-      toast.success('QR scanned', `Code ${cleaned} detected.`);
+      toast.success(t('join.toastQrScanned'), t('join.toastCodeDetectedShort', { code: cleaned }));
       stopScanner();
     } catch (err) {
       console.error('[QR Scanner] QR processing error:', err);
     }
   };
 
-  /* Stop scanner */
   const stopScanner = async () => {
     const scanner = scannerRef.current;
     scannerRef.current = null;
@@ -404,7 +347,6 @@ export default function JoinRoomPage() {
     }
   };
 
-  /* Cleanup scanner */
   useEffect(() => {
     return () => {
       const scanner = scannerRef.current;
@@ -423,7 +365,6 @@ export default function JoinRoomPage() {
     };
   }, []);
 
-  /* Manual code input */
   const handleChange = (e) => {
     const cleaned = normalizeRoomCode(e.target.value);
     setCode(cleaned);
@@ -432,7 +373,6 @@ export default function JoinRoomPage() {
     if (joinStage) setJoinStage('');
   };
 
-  /* Paste from clipboard */
   const handlePaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
@@ -442,22 +382,15 @@ export default function JoinRoomPage() {
         setCode(cleaned);
         setError('');
         setJoinStage('');
-        toast.success('Code pasted', `Code ${cleaned} detected.`);
+        toast.success(t('join.toastCodePasted'), t('join.toastCodeDetectedShort', { code: cleaned }));
       } else {
-        toast.warning(
-          'No room code found',
-          'The clipboard does not contain a valid room code or link.',
-        );
+        toast.warning(t('join.toastNoCodeClipboard'), t('join.toastNoCodeClipboardBody'));
       }
     } catch {
-      toast.warning(
-        'Paste unavailable',
-        'Allow clipboard access in your browser, or type the code instead.',
-      );
+      toast.warning(t('join.toastPasteUnavailable'), t('join.toastPasteUnavailableBody'));
     }
   };
 
-  /* Check room */
   const checkRoom = (roomCode) => {
     return new Promise((resolve, reject) => {
       if (!socket) {
@@ -487,20 +420,17 @@ export default function JoinRoomPage() {
     });
   };
 
-  /* Join room */
   const handleJoinRoom = async (e) => {
     if (e) e.preventDefault();
     if (joining) return;
 
     if (!isValidRoomCode(code)) {
-      setError('Please enter a valid 5-character room code.');
+      setError(t('join.errorInvalidCode'));
       return;
     }
 
     if (!socket || !connected || !socket.connected) {
-      setError(
-        'Connecting to WebDrop server. Please wait a moment and try again.',
-      );
+      setError(t('join.errorConnecting'));
       return;
     }
 
@@ -508,7 +438,7 @@ export default function JoinRoomPage() {
 
     setError('');
     setJoining(true);
-    setJoinStage('Finding room…');
+    setJoinStage(t('join.stageFinding'));
 
     try {
       const response = await checkRoom(roomCode);
@@ -516,31 +446,36 @@ export default function JoinRoomPage() {
       if (!response?.success) {
         const serverMessage =
           response?.message ||
-          'Room not found. Please check the room code and try again.';
+          t('join.errorNotFound');
 
         setError(serverMessage);
         setJoinStage('');
         setJoining(false);
 
-        toast.error('Room unavailable', serverMessage);
+        toast.error(t('join.toastRoomUnavailable'), serverMessage);
         return;
       }
 
-      setJoinStage('Room found');
+      setJoinStage(t('join.stageFound'));
 
       await new Promise((resolve) => {
         setTimeout(resolve, 350);
       });
 
-      setJoinStage('Establishing connection…');
+      setJoinStage(t('join.stageEstablishing'));
 
-      addRecentRoom({
-        roomCode,
-        role: 'guest',
-        deviceName,
-        joinedAt: Date.now(),
-        lastJoinedAt: Date.now(),
-      });
+      // Save as GUEST on this device only (notifications)
+      try {
+        addRecentRoom({
+          roomCode,
+          role: 'guest',
+          deviceName,
+          joinedAt: Date.now(),
+          lastJoinedAt: Date.now(),
+        });
+      } catch (err) {
+        console.warn('[JoinRoom] addRecentRoom failed:', err);
+      }
 
       if (showScanner) {
         await stopScanner();
@@ -554,31 +489,30 @@ export default function JoinRoomPage() {
     } catch (err) {
       console.error('[JoinRoom] Room check failed:', err);
 
-      let message = 'Failed to check the room. Please try again.';
+      let message = t('join.errorCheckFailed');
 
       if (err?.message === 'Room check timed out.') {
         message =
-          'Room check timed out. Please check your connection and try again.';
+          t('join.errorTimeout');
       }
 
       if (err?.message === 'WebDrop server is not connected.') {
         message =
-          'WebDrop server is not connected. Please wait a moment and try again.';
+          t('join.errorServer');
       }
 
       if (err?.message === 'Socket connection is not available.') {
-        message = 'Connection to the WebDrop server is unavailable.';
+        message = t('join.errorSocket');
       }
 
       setError(message);
       setJoinStage('');
       setJoining(false);
 
-      toast.error('Connection failed', message);
+      toast.error(t('join.toastConnectionFailed'), message);
     }
   };
 
-  /* Cancel */
   const handleCancel = async () => {
     if (showScanner || scannerRef.current) {
       await stopScanner();
@@ -589,21 +523,18 @@ export default function JoinRoomPage() {
     setError('');
     setCode('');
 
-    toast.info('Join cancelled', 'Room code and connection attempt were cleared.');
+    toast.info(t('join.toastJoinCancelled'), t('join.toastJoinCancelledBody'));
   };
 
-  /* Recent rooms */
   const recentRooms = useMemo(() => getRecentRooms(), []);
   const codeReady = code.length === 5;
   const isConnected = Boolean(connected && socket?.connected);
 
   return (
-    <div className="relative min-h-screen bg-[#FBFAFF] text-slate-900 transition-colors dark:bg-surface dark:text-white">
-      {/* Top accent */}
+    <div className="relative min-h-screen overflow-x-hidden bg-[#FBFAFF] text-slate-900 transition-colors dark:bg-surface dark:text-white">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
 
-      <main className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-12 lg:px-10">
-        {/* Top nav */}
+      <main className="mx-auto w-full max-w-[1200px] px-4 pb-28 pt-8 sm:px-6 sm:pb-28 sm:pt-12 lg:px-10 lg:pb-16">
         <button
           type="button"
           onClick={() => navigate('/')}
@@ -613,41 +544,37 @@ export default function JoinRoomPage() {
             className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
             strokeWidth={2.4}
           />
-          Back to home
+          {t('join.back')}
         </button>
 
         <section className="mt-8 sm:mt-12">
           <div className="grid gap-10 lg:grid-cols-[1.35fr_1fr] lg:gap-14">
-            {/* ============ LEFT COLUMN ============ */}
-            <div>
-              {/* Eyebrow */}
+            {/* LEFT */}
+            <div className="min-w-0">
               <div className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/80 px-3 py-1 dark:border-violet-500/20 dark:bg-violet-500/[0.08]">
                 <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
                 <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300">
-                  Join a transfer
+                  {t('join.badge')}
                 </span>
               </div>
 
-              {/* Heading — same size as CreateRoom */}
-              <h1 className="mt-4 font-heading text-[32px] font-extrabold leading-[1.08] tracking-[-0.035em] text-slate-900 dark:text-white sm:text-[42px] lg:text-[48px]">
-                Enter your
+              <h1 className="mt-4 font-heading text-[28px] font-extrabold leading-[1.08] tracking-[-0.035em] text-slate-900 dark:text-white sm:text-[42px] lg:text-[48px]">
+                {t('join.titleLine1')}
                 <span className="block bg-gradient-to-r from-violet-600 via-violet-500 to-indigo-600 bg-clip-text text-transparent">
-                  room code.
+                  {t('join.titleLine2')}
                 </span>
               </h1>
 
-              <p className="mt-5 max-w-[560px] text-[14.5px] leading-7 text-slate-600 dark:text-slate-400">
-                Type the code from the sending device — or scan its QR. As soon
+              <p className="mt-4 max-w-[560px] text-[13.5px] leading-6 text-slate-600 dark:text-slate-400 sm:mt-5 sm:text-[14.5px] sm:leading-7">
+                Type the code from the sending device — {t('join.orScan')} its QR. As soon
                 as you connect, files travel directly between the two devices.
               </p>
 
-              {/* ============ JOIN FORM CARD ============ */}
               <form
                 onSubmit={handleJoinRoom}
                 noValidate
-                className="mt-8 rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6"
+                className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:mt-8 sm:p-6"
               >
-                {/* Header */}
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <span
@@ -661,12 +588,12 @@ export default function JoinRoomPage() {
                     </span>
                     <div className="min-w-0">
                       <p className="text-[14px] font-bold text-slate-900 dark:text-white">
-                        Your room code
+                        {t('join.yourCode')}
                       </p>
                       <p className="mt-1 text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
                         {codeReady
-                          ? 'Code looks good — ready to connect.'
-                          : '5 characters. Letters O, I and digits 0, 1 are skipped.'}
+                          ? t('join.codeReady')
+                          : t('join.codeHint')}
                       </p>
                     </div>
                   </div>
@@ -689,7 +616,6 @@ export default function JoinRoomPage() {
                   </span>
                 </div>
 
-                {/* Input */}
                 <div className="mt-6">
                   <div className="relative">
                     <Hash
@@ -708,7 +634,7 @@ export default function JoinRoomPage() {
                       autoCapitalize="characters"
                       spellCheck={false}
                       disabled={joining}
-                      aria-label="Room code"
+                      aria-label={t('join.roomCodeAria')}
                       inputMode="text"
                       aria-invalid={error ? true : undefined}
                       className={`h-[72px] w-full rounded-2xl border bg-white pl-14 pr-16 text-center font-mono text-[26px] font-extrabold tracking-[0.32em] text-slate-900 caret-violet-600 placeholder:font-sans placeholder:tracking-[0.25em] placeholder:text-slate-300 focus:outline-none focus:ring-4 disabled:opacity-70 dark:bg-white/[0.025] dark:text-white dark:placeholder:text-slate-600 sm:h-[84px] sm:text-[34px] sm:tracking-[0.4em] ${
@@ -734,10 +660,9 @@ export default function JoinRoomPage() {
                     )}
                   </div>
 
-                  {/* Paste / clear row */}
                   <div className="mt-3 flex items-center justify-between gap-4">
                     <p className="text-[11.5px] leading-5 text-slate-400 dark:text-slate-500">
-                      Paste a code or full invite link.
+                      {t('join.pasteHint')}
                     </p>
 
                     <div className="flex shrink-0 items-center gap-3">
@@ -772,7 +697,6 @@ export default function JoinRoomPage() {
                     </div>
                   </div>
 
-                  {/* Error */}
                   {error && (
                     <div
                       role="alert"
@@ -789,18 +713,53 @@ export default function JoinRoomPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Primary actions — desktop only (lg+). Mobile + tablet use sticky bar */}
+                  <div className="mt-5 hidden items-center gap-2.5 lg:flex lg:gap-3">
+                    <button
+                      type="submit"
+                      disabled={joining || !codeReady || !isConnected}
+                      className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-[13.5px] font-bold text-white shadow-lg shadow-violet-600/20 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none dark:disabled:bg-white/[0.08] dark:disabled:text-slate-500 sm:h-12 sm:px-6 sm:text-[14px] ${FOCUS_RING}`}
+                    >
+                      {joining ? (
+                        <>
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2.6} />
+                          <span className="truncate">{joinStage || t('join.connecting')}</span>
+                        </>
+                      ) : !isConnected ? (
+                        <>
+                          <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2.6} />
+                          <span className="truncate">{t('join.connecting')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Radio className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+                          <span className="truncate">{t('join.connect')}</span>
+                          <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2.6} />
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCancel}
+                      disabled={joining}
+                      className={`inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-white px-3.5 text-[12.5px] font-bold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 disabled:opacity-50 dark:border-red-500/25 dark:bg-transparent dark:text-red-400 dark:hover:border-red-500/40 dark:hover:bg-red-500/10 sm:h-12 sm:gap-2 sm:px-5 sm:text-[13.5px] ${FOCUS_RING}`}
+                    >
+                      <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={2.4} />
+                      <span>{t('join.cancel')}</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Divider */}
-                <div className="my-6 flex items-center gap-4">
+                <div className="my-5 flex items-center gap-4 sm:my-6">
                   <div className="h-px flex-1 bg-slate-100 dark:bg-white/[0.06]" />
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    or scan
+                    {t('join.orScan')}
                   </span>
                   <div className="h-px flex-1 bg-slate-100 dark:bg-white/[0.06]" />
                 </div>
 
-                {/* QR toggle button */}
                 {!showScanner && (
                   <button
                     type="button"
@@ -809,11 +768,10 @@ export default function JoinRoomPage() {
                     className={`inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-white px-5 text-[13px] font-semibold text-slate-700 transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/[0.09] dark:bg-white/[0.02] dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/[0.06] dark:hover:text-violet-300 ${FOCUS_RING}`}
                   >
                     <Camera className="h-4 w-4" strokeWidth={2.2} />
-                    Scan QR code
+                    {t('join.scanQr')}
                   </button>
                 )}
 
-                {/* QR scanner view */}
                 {showScanner && (
                   <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 dark:border-white/[0.07] dark:bg-white/[0.025]">
                     <div className="flex items-center justify-between border-b border-slate-200/80 px-4 py-3 dark:border-white/[0.05]">
@@ -823,14 +781,14 @@ export default function JoinRoomPage() {
                           strokeWidth={2.2}
                         />
                         <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">
-                          Scan room QR
+                          {t('join.scanRoomQr')}
                         </span>
                       </div>
 
                       <button
                         type="button"
                         onClick={stopScanner}
-                        aria-label="Close QR scanner"
+                        aria-label={t('join.closeScanner')}
                         className={`flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-white/[0.07] dark:hover:text-white ${FOCUS_RING}`}
                       >
                         <X className="h-4 w-4" strokeWidth={2} />
@@ -848,10 +806,10 @@ export default function JoinRoomPage() {
                               strokeWidth={2.2}
                             />
                             <p className="mt-3 text-[13px] font-medium text-slate-500 dark:text-slate-400">
-                              Starting camera…
+                              {t('join.startingCamera')}
                             </p>
                             <p className="mt-1 text-[12px] text-slate-400 dark:text-slate-500">
-                              Allow camera access if your browser asks.
+                              {t('join.allowCamera')}
                             </p>
                           </div>
                         </div>
@@ -860,49 +818,12 @@ export default function JoinRoomPage() {
 
                     <div className="border-t border-slate-200/80 px-4 py-3 dark:border-white/[0.05]">
                       <p className="text-center text-[12px] leading-5 text-slate-400 dark:text-slate-500">
-                        Point your camera at the QR code on the sending device.
+                        {t('join.pointCamera')}
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* Actions */}
-                <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <button
-                    type="submit"
-                    disabled={joining || !codeReady || !isConnected}
-                    className={`inline-flex h-12 w-full items-center justify-center gap-2.5 rounded-xl bg-violet-600 px-6 text-[14px] font-bold text-white shadow-lg shadow-violet-600/20 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none dark:disabled:bg-white/[0.08] dark:disabled:text-slate-500 ${FOCUS_RING}`}
-                  >
-                    {joining ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.6} />
-                        <span>{joinStage || 'Connecting…'}</span>
-                      </>
-                    ) : !isConnected ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.6} />
-                        <span>Connecting…</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Connect to room</span>
-                        <ArrowRight className="h-4 w-4" strokeWidth={2.6} />
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleCancel}
-                    disabled={joining}
-                    className={`inline-flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-[13px] font-semibold text-slate-700 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:border-white/[0.09] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:border-red-500/20 dark:hover:bg-red-500/[0.06] dark:hover:text-red-400 sm:w-auto ${FOCUS_RING}`}
-                  >
-                    <X className="h-3.5 w-3.5" strokeWidth={2.2} />
-                    Clear
-                  </button>
-                </div>
-
-                {/* Status strip */}
                 <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-4 dark:border-white/[0.06]">
                   <div className="flex items-center gap-2">
                     <span
@@ -911,16 +832,15 @@ export default function JoinRoomPage() {
                       }`}
                     />
                     <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
-                      {isConnected ? 'Server connected' : 'Connecting to server…'}
+                      {isConnected ? t('join.serverConnected') : t('join.connectingServer')}
                     </span>
                   </div>
                   <span className="hidden h-3 w-px bg-slate-200 dark:bg-white/[0.08] sm:block" />
                   <span className="text-[12px] text-slate-400 dark:text-slate-500">
-                    Signaling only — no file storage
+                    {t('join.signalingOnly')}
                   </span>
                 </div>
 
-                {/* Not connected warning */}
                 {!isConnected && (
                   <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-200/70 bg-amber-50/60 p-3 dark:border-amber-500/15 dark:bg-amber-500/[0.06]">
                     <AlertCircle
@@ -928,23 +848,21 @@ export default function JoinRoomPage() {
                       strokeWidth={2.4}
                     />
                     <p className="text-[11.5px] leading-relaxed text-amber-900/80 dark:text-amber-200/80">
-                      <strong className="font-semibold">Waiting for connection.</strong>{' '}
-                      Joining will become available once we reach the WebDrop
-                      server. Usually a few seconds.
+                      <strong className="font-semibold">{t('join.waitingConnection')}</strong>{' '}
+                      {t('join.waitingConnectionBody')}
                     </p>
                   </div>
                 )}
               </form>
 
-              {/* ============ RECENT ROOMS ============ */}
               {recentRooms.length > 0 && (
                 <div className="mt-6">
-                  <SectionLabel icon={History}>Recent rooms</SectionLabel>
+                  <SectionLabel icon={History}>{t('join.recentRooms')}</SectionLabel>
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     {recentRooms.map((room) => (
                       <button
-                        key={`${room.roomCode}-${room.lastJoinedAt}`}
+                        key={`${room.roomCode}-${room.lastJoinedAt || room.joinedAt || room.at}`}
                         type="button"
                         onClick={() => {
                           const cleaned = normalizeRoomCode(room.roomCode);
@@ -960,7 +878,7 @@ export default function JoinRoomPage() {
                           {room.roomCode}
                         </span>
                         <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold capitalize text-slate-500 dark:bg-white/[0.05] dark:text-slate-400">
-                          {room.role}
+                          {t(room.role === 'host' ? 'join.roleHost' : 'join.roleGuest')}
                         </span>
                       </button>
                     ))}
@@ -968,28 +886,27 @@ export default function JoinRoomPage() {
                 </div>
               )}
 
-              {/* ============ CAPABILITIES ============ */}
               <div className="mt-10">
-                <SectionLabel icon={CircleDot}>Capabilities</SectionLabel>
+                <SectionLabel icon={CircleDot}>{t('join.capabilities')}</SectionLabel>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  {CAPABILITIES.map(({ icon: Icon, title, desc, tone }) => {
-                    const t = ToneStyles(tone);
+                  {CAPABILITY_KEYS.map(({ icon: Icon, titleKey, descKey, tone }) => {
+                    const tones = ToneStyles(tone);
                     return (
                       <div
-                        key={title}
+                        key={titleKey}
                         className="rounded-xl border border-slate-200 bg-white p-4 transition-colors hover:border-violet-200 dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:border-violet-500/30"
                       >
                         <span
-                          className={`flex h-8 w-8 items-center justify-center rounded-lg ${t.bg} ${t.text}`}
+                          className={`flex h-8 w-8 items-center justify-center rounded-lg ${tones.bg} ${tones.text}`}
                         >
                           <Icon className="h-4 w-4" strokeWidth={2.2} />
                         </span>
                         <p className="mt-3 text-[13px] font-bold text-slate-900 dark:text-white">
-                          {title}
+                          {t(titleKey)}
                         </p>
                         <p className="mt-1 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400">
-                          {desc}
+                          {t(descKey)}
                         </p>
                       </div>
                     );
@@ -997,16 +914,15 @@ export default function JoinRoomPage() {
                 </div>
               </div>
 
-              {/* ============ FAQS ============ */}
               <div className="mt-10">
-                <SectionLabel icon={Info}>Common questions</SectionLabel>
+                <SectionLabel icon={Info}>{t('join.commonQuestions')}</SectionLabel>
 
                 <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
-                  {FAQS.map(({ q, a }, i) => (
+                  {FAQ_KEYS.map(({ qKey, aKey }, i) => (
                     <details
-                      key={q}
+                      key={qKey}
                       className={`group ${
-                        i !== FAQS.length - 1
+                        i !== FAQ_KEYS.length - 1
                           ? 'border-b border-slate-100 dark:border-white/[0.06]'
                           : ''
                       }`}
@@ -1014,7 +930,7 @@ export default function JoinRoomPage() {
                       <summary
                         className={`flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[12.5px] font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.03] [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
                       >
-                        <span className="pr-2">{q}</span>
+                        <span className="pr-2">{t(qKey)}</span>
                         <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition-transform group-open:rotate-45 group-open:border-violet-300 group-open:bg-violet-50 group-open:text-violet-600 dark:border-white/[0.08] dark:text-slate-500 dark:group-open:border-violet-500/30 dark:group-open:bg-violet-500/[0.08] dark:group-open:text-violet-400">
                           <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                             <path
@@ -1027,7 +943,7 @@ export default function JoinRoomPage() {
                         </span>
                       </summary>
                       <p className="px-4 pb-3 pr-10 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
-                        {a}
+                        {t(aKey)}
                       </p>
                     </details>
                   ))}
@@ -1035,23 +951,23 @@ export default function JoinRoomPage() {
               </div>
             </div>
 
-            {/* ============ RIGHT COLUMN (STICKY) ============ */}
-            <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            {/* RIGHT */}
+            <aside className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:self-start">
               <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-                <SectionLabel icon={Command}>How joining works</SectionLabel>
+                <SectionLabel icon={Command}>{t('join.howJoining')}</SectionLabel>
 
                 <ol className="mt-4 space-y-4">
-                  {JOIN_STEPS.map(({ icon: Icon, title, text }, i) => (
-                    <li key={title} className="flex gap-3">
+                  {JOIN_STEP_KEYS.map(({ icon: Icon, titleKey, textKey }, i) => (
+                    <li key={titleKey} className="flex gap-3">
                       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                         {i + 1}
                       </span>
                       <div className="min-w-0">
                         <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-                          {title}
+                          {t(titleKey)}
                         </p>
                         <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
-                          {text}
+                          {t(textKey)}
                         </p>
                       </div>
                     </li>
@@ -1060,58 +976,55 @@ export default function JoinRoomPage() {
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-                <SectionLabel icon={Server}>Technical details</SectionLabel>
+                <SectionLabel icon={Server}>{t('join.techDetails')}</SectionLabel>
 
                 <dl className="mt-4 space-y-3">
-                  {SPECS.map(({ label, value, icon: Icon }) => (
-                    <div key={label} className="flex items-center justify-between gap-3">
+                  {SPEC_KEYS.map(({ labelKey, value, valueKey, icon: Icon }) => (
+                    <div key={labelKey} className="flex items-center justify-between gap-3">
                       <dt className="flex items-center gap-2 text-[12px] text-slate-500 dark:text-slate-400">
                         <Icon
                           className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500"
                           strokeWidth={2.2}
                         />
-                        {label}
+                        {t(labelKey)}
                       </dt>
                       <dd className="text-right font-mono text-[11.5px] font-semibold text-slate-800 dark:text-slate-200">
-                        {value}
+                        {valueKey ? t(valueKey) : value}
                       </dd>
                     </div>
                   ))}
                 </dl>
               </div>
 
-              {/* Troubleshooting */}
               <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-                <SectionLabel icon={LifeBuoy}>Code not working?</SectionLabel>
+                <SectionLabel icon={LifeBuoy}>{t('join.codeNotWorking')}</SectionLabel>
 
                 <ul className="mt-4 space-y-3">
-                  {TROUBLESHOOTING.map(({ icon: Icon, text }) => (
-                    <li key={text} className="flex items-start gap-2.5">
+                  {TROUBLE_KEYS.map(({ icon: Icon, textKey }) => (
+                    <li key={textKey} className="flex items-start gap-2.5">
                       <Icon
                         className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500"
                         strokeWidth={2.2}
                       />
                       <span className="text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400">
-                        {text}
+                        {t(textKey)}
                       </span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              {/* Device card */}
               <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-                <SectionLabel icon={Smartphone}>You're joining as</SectionLabel>
+                <SectionLabel icon={Smartphone}>{t('join.joiningAs')}</SectionLabel>
 
                 <p className="mt-3 text-[13px] font-semibold text-slate-800 dark:text-slate-200">
                   {deviceName}
                 </p>
                 <p className="mt-1 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400">
-                  This is how the sender will see your device.
+                  {t('join.deviceHint')}
                 </p>
               </div>
 
-              {/* Security */}
               <div className="rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/90 to-emerald-50/40 p-5 dark:border-emerald-500/15 dark:from-emerald-500/[0.08] dark:to-emerald-500/[0.03]">
                 <div className="flex items-start gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-600 shadow-sm dark:bg-white/[0.06] dark:text-emerald-400">
@@ -1119,11 +1032,10 @@ export default function JoinRoomPage() {
                   </span>
                   <div className="min-w-0">
                     <p className="text-[12.5px] font-bold text-emerald-900 dark:text-emerald-200">
-                      Private by design
+                      {t('join.privateTitle')}
                     </p>
                     <p className="mt-1 text-[11.5px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
-                      Files travel encrypted between the two devices. Nothing
-                      is stored on our servers.
+                      {t('join.privateBody')}
                     </p>
                   </div>
                 </div>
@@ -1132,6 +1044,47 @@ export default function JoinRoomPage() {
           </div>
         </section>
       </main>
+
+      {/* Fixed bottom CTA — mobile + tablet (lg:hidden), same pattern as CreateRoom ReadyView */}
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200/90 bg-white/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#0f1115]/95 dark:shadow-[0_-8px_30px_rgba(0,0,0,0.35)] lg:hidden">
+        <div className="mx-auto flex w-full max-w-[1200px] items-center gap-2 sm:gap-2.5">
+          <button
+            type="button"
+            onClick={handleJoinRoom}
+            disabled={joining || !codeReady || !isConnected}
+            className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-[13px] font-bold text-white shadow-lg shadow-violet-600/25 transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none dark:disabled:bg-white/[0.08] dark:disabled:text-slate-500 sm:h-12 sm:px-4 sm:text-[14px] ${FOCUS_RING}`}
+          >
+            {joining ? (
+              <>
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2.6} />
+                <span className="truncate">{joinStage || t('join.connecting')}</span>
+              </>
+            ) : !isConnected ? (
+              <>
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" strokeWidth={2.6} />
+                <span className="truncate">{t('join.connecting')}</span>
+              </>
+            ) : (
+              <>
+                <Radio className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+                <span className="truncate">{t('join.connect')}</span>
+                <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2.6} />
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleCancel}
+            disabled={joining}
+            className={`inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-[12px] font-bold text-red-600 transition-colors hover:border-red-300 hover:bg-red-100 disabled:opacity-50 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-400 dark:hover:border-red-500/40 dark:hover:bg-red-500/15 sm:h-12 sm:px-4 sm:text-[13px] ${FOCUS_RING}`}
+            aria-label={t('join.cancel')}
+          >
+            <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+            <span className="hidden xs:inline sm:inline">{t('join.cancel')}</span>
+          </button>
+        </div>
+      </div>
 
       <ScrollToTop />
     </div>

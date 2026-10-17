@@ -1,0 +1,103 @@
+{
+  "brand": {
+    "name": "WebDrop",
+    "tagline": "Drop. Connect. Transfer.",
+    "footerTagline": "सीधा. प्राइवेट. तेज़."
+  },
+  "nav": {
+    "overview": "होम",
+    "create": "रूम बनाएँ",
+    "join": "रूम जॉइन करें",
+    "about": "हमारे बारे में",
+    "team": "टीम",
+    "source": "सोर्स",
+    "startTransfer": "ट्रांसफर शुरू",
+    "skipToContent": "मुख्य सामग्री पर जाएँ",
+    "homeAria": "WebDrop होम",
+    "openMenu": "मेनू खोलें",
+    "closeMenu": "मेनू बंद करें",
+    "primaryNav": "मुख्य नेविगेशन",
+    "mobileNav": "मोबाइल नेविगेशन"
+  },
+  "lang": {
+    "switchToEn": "English",
+    "switchToHi": "हिन्दी",
+    "aria": "भाषा बदलें"
+  },
+  "theme": {
+    "light": "लाइट मोड",
+    "dark": "डार्क मोड",
+    "toLight": "लाइट मोड पर जाएँ",
+    "toDark": "डार्क मोड पर जाएँ"
+  },
+  "room": {
+    "active": "रूम सक्रिय",
+    "ready": "तैयार",
+    "activeShort": "सक्रिय",
+    "copyCode": "रूम कोड कॉपी करें",
+    "host": "होस्ट",
+    "guest": "गेस्ट",
+    "server": "सर्वर",
+    "offline": "ऑफ़लाइन",
+    "live": "लाइव"
+  },
+  "status": {
+    "serverOnline": "सर्वर ऑनलाइन",
+    "serverOffline": "सर्वर ऑफ़लाइन",
+    "connected": "जुड़ा",
+    "disconnected": "डिस्कनेक्ट",
+    "connectionOverview": "कनेक्शन विवरण",
+    "networkStatus": "आपका वर्तमान नेटवर्क स्टेटस",
+    "signalingServer": "सिग्नलिंग सर्वर",
+    "networkType": "नेटवर्क प्रकार",
+    "networkQuality": "नेटवर्क क्वालिटी",
+    "unavailable": "उपलब्ध नहीं",
+    "estimatedSpeed": "अनुमानित स्पीड",
+    "estimatedLatency": "अनुमानित लेटेंसी",
+    "openDetails": "कनेक्शन विवरण खोलें",
+    "closeDetails": "कनेक्शन विवरण बंद करें",
+    "peerHelp": "WebDrop जहाँ संभव हो फ़ाइलें सीधे डिवाइसों के बीच भेजता है। सिग्नलिंग सर्वर सिर्फ़ डिवाइसों को एक-दूसरे से मिलने में मदद करता है।"
+  },
+  "notifications": {
+    "title": "हाल के रूम",
+    "subtitle": "सिर्फ़ इस डिवाइस पर · {{count}} रूम",
+    "subtitle_plural": "सिर्फ़ इस डिवाइस पर · {{count}} रूम",
+    "emptyTitle": "इस डिवाइस पर कोई रूम नहीं",
+    "emptyBody": "रूम बनाएँ या कोड से जॉइन करें — यहाँ दिखेगा ताकि बाद में फिर जुड़ सकें। सूची दूसरे फ़ोन या ब्राउज़र से शेयर नहीं होती।",
+    "footer": "सिर्फ़ इस ब्राउज़र के रूम। दूसरे डिवाइस से शेयर नहीं।",
+    "clearAll": "सब साफ़ करें",
+    "rejoin": "फिर जुड़ें",
+    "rejoining": "जुड़ रहे हैं…",
+    "refresh": "रिफ़्रेश",
+    "close": "नोटिफ़िकेशन बंद करें",
+    "removeRoom": "रूम {{code}} हटाएँ",
+    "removeTitle": "इस डिवाइस से हटाएँ",
+    "recentAria": "नोटिफ़िकेशन और हाल के रूम",
+    "bellTitle": "इस डिवाइस के हाल के रूम",
+    "recentRoomFallback": "हाल का रूम"
+  },
+  "toast": {
+    "transferInProgress": "ट्रांसफर चल रहा है",
+    "transferInProgressBody": "नेविगेट करने से पहले वर्तमान ट्रांसफर पूरा या रद्द करें।",
+    "codeCopied": "रूम कोड कॉपी हो गया",
+    "codeCopiedBody": "{{code}} शेयर के लिए तैयार है।",
+    "copyFailed": "कॉपी नहीं हुआ",
+    "copyFailedBody": "कृपया रूम कोड खुद कॉपी करें।",
+    "rejoinUnavailable": "फिर जुड़ना उपलब्ध नहीं",
+    "rejoinUnavailableBody": "रूम रीजॉइन अभी सेटअप नहीं है।",
+    "serverOffline": "सर्वर ऑफ़लाइन",
+    "serverOfflineBody": "फिर जुड़ने से पहले सिग्नलिंग सर्वर से कनेक्ट करें।",
+    "unableRejoin": "फिर नहीं जुड़ सके",
+    "unableRejoinBody": "रूम खत्म हो चुका हो या भरा हो सकता है।",
+    "roomRejoined": "रूम से फिर जुड़े",
+    "roomRejoinedBody": "रूम {{code}} से फिर कनेक्ट हुए।",
+    "rejoinFailed": "रीजॉइन असफल",
+    "tryAgain": "कृपया फिर कोशिश करें।",
+    "cleared": "साफ़ हो गया",
+    "clearedBody": "इस डिवाइस से सभी हाल के रूम कोड हटा दिए गए।"
+  },
+  "github": {
+    "view": "GitHub पर देखें",
+    "aria": "GitHub पर WebDrop सोर्स देखें"
+  }
+}

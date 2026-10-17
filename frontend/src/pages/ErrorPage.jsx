@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -9,6 +10,8 @@ import {
 import logo from '../assets/images/Logo.png';
 
 export default function ErrorPage({ error }) {
+  const { t } = useTranslation();
+
   const handleReload = () => {
     window.location.reload();
   };
@@ -16,7 +19,7 @@ export default function ErrorPage({ error }) {
   const errorMessage =
     error?.message ||
     error?.statusText ||
-    'An unexpected error occurred while loading this page.';
+    t('error.fallback');
 
   return (
     <div
@@ -33,7 +36,6 @@ export default function ErrorPage({ error }) {
         dark:bg-[#09090F]
       "
     >
-      {/* Background glow */}
       <div
         className="
           pointer-events-none
@@ -51,7 +53,6 @@ export default function ErrorPage({ error }) {
         "
       />
 
-      {/* Background grid */}
       <div
         className="
           pointer-events-none
@@ -81,7 +82,6 @@ export default function ErrorPage({ error }) {
         }}
       />
 
-      {/* Top accent */}
       <div
         className="
           pointer-events-none
@@ -98,11 +98,9 @@ export default function ErrorPage({ error }) {
         "
       />
 
-      {/* Decorative left node */}
       <div className="pointer-events-none absolute left-[10%] top-[28%] hidden md:block">
         <div className="relative">
           <div className="h-2 w-2 rounded-full bg-purple-400/40" />
-
           <div
             className="
               absolute
@@ -120,11 +118,9 @@ export default function ErrorPage({ error }) {
         </div>
       </div>
 
-      {/* Decorative right node */}
       <div className="pointer-events-none absolute right-[11%] top-[34%] hidden md:block">
         <div className="relative">
           <div className="h-1.5 w-1.5 rounded-full bg-slate-400/40 dark:bg-slate-500" />
-
           <div
             className="
               absolute
@@ -143,9 +139,7 @@ export default function ErrorPage({ error }) {
         </div>
       </div>
 
-      {/* Main content */}
       <main className="relative z-10 w-full max-w-[520px] text-center">
-        {/* WebDrop logo */}
         <div className="mb-8 flex items-center justify-center">
           <img
             src={logo}
@@ -160,7 +154,6 @@ export default function ErrorPage({ error }) {
           />
         </div>
 
-        {/* Status badge */}
         <div
           className="
             mx-auto
@@ -185,10 +178,9 @@ export default function ErrorPage({ error }) {
           "
         >
           <span className="h-1.5 w-1.5 rounded-full bg-red-500 dark:bg-red-400" />
-          Application error
+          {t('error.badge')}
         </div>
 
-        {/* Error icon */}
         <div className="mt-7 flex justify-center">
           <div
             className="
@@ -210,14 +202,10 @@ export default function ErrorPage({ error }) {
               dark:shadow-none
             "
           >
-            <AlertTriangle
-              className="h-7 w-7"
-              strokeWidth={1.7}
-            />
+            <AlertTriangle className="h-7 w-7" strokeWidth={1.7} />
           </div>
         </div>
 
-        {/* Heading */}
         <div className="mt-7">
           <h1
             className="
@@ -231,7 +219,7 @@ export default function ErrorPage({ error }) {
               dark:text-white
             "
           >
-            Something went wrong.
+            {t('error.title')}
           </h1>
 
           <p
@@ -246,12 +234,10 @@ export default function ErrorPage({ error }) {
               dark:text-slate-400
             "
           >
-            We couldn't load this page correctly.
-            Please try again or return to WebDrop.
+            {t('error.body')}
           </p>
         </div>
 
-        {/* Error details */}
         <div
           className="
             mx-auto
@@ -292,7 +278,7 @@ export default function ErrorPage({ error }) {
                 dark:text-slate-500
               "
             >
-              Error details
+              {t('error.details')}
             </span>
 
             <span
@@ -310,7 +296,7 @@ export default function ErrorPage({ error }) {
                 dark:text-slate-500
               "
             >
-              Debug
+              {t('error.debug')}
             </span>
           </div>
 
@@ -333,7 +319,6 @@ export default function ErrorPage({ error }) {
           </pre>
         </div>
 
-        {/* Actions */}
         <div
           className="
             mt-7
@@ -382,8 +367,7 @@ export default function ErrorPage({ error }) {
               "
               strokeWidth={2}
             />
-
-            Try Again
+            {t('error.tryAgain')}
           </button>
 
           <Link
@@ -419,13 +403,8 @@ export default function ErrorPage({ error }) {
               dark:hover:text-white
             "
           >
-            <Home
-              className="h-[15px] w-[15px]"
-              strokeWidth={1.9}
-            />
-
-            Back to Home
-
+            <Home className="h-[15px] w-[15px]" strokeWidth={1.9} />
+            {t('error.backHome')}
             <ArrowUpRight
               className="
                 h-3.5
@@ -440,7 +419,6 @@ export default function ErrorPage({ error }) {
           </Link>
         </div>
 
-        {/* Tagline */}
         <div
           className="
             mt-9
@@ -456,14 +434,11 @@ export default function ErrorPage({ error }) {
           "
         >
           <span className="h-px w-8 bg-slate-200 dark:bg-white/[0.06]" />
-
-          Drop. Connect. Transfer.
-
+          {t('error.tagline')}
           <span className="h-px w-8 bg-slate-200 dark:bg-white/[0.06]" />
         </div>
       </main>
 
-      {/* Bottom accent */}
       <div
         className="
           pointer-events-none

@@ -1241,12 +1241,17 @@ export default function RoomPage() {
             );
           }
 
-          addRecentRoom?.({
-            roomCode,
-            role: detectedRole,
-            deviceName,
-            joinedAt: Date.now(),
-          });
+          // Persist on THIS device only — host or guest from join response
+          try {
+            addRecentRoom?.({
+              roomCode,
+              role: detectedRole === 'host' ? 'host' : 'guest',
+              deviceName,
+              joinedAt: Date.now(),
+            });
+          } catch {
+            // Recent-room persistence must never block joining
+          }
 
           setTimeout(() => {
             if (mounted) setJoining(false);

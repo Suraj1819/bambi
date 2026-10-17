@@ -1,7 +1,7 @@
-// src/pages/Home.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Radio,
   ArrowRight,
@@ -219,6 +219,7 @@ function startDownload(url) {
 ========================================================= */
 
 function ScrollToTop() {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -234,7 +235,7 @@ function ScrollToTop() {
     <button
       type="button"
       onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-      aria-label="Scroll to top"
+      aria-label={t('home.scrollTop')}
       className={`fixed bottom-5 right-5 z-40 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-600 shadow-lg backdrop-blur-sm transition-colors duration-200 hover:border-violet-300 hover:text-violet-600 dark:border-white/[0.1] dark:bg-[#15171d]/95 dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300 ${FOCUS_RING}`}
     >
       <ArrowUp className="h-4 w-4" strokeWidth={2.4} />
@@ -247,6 +248,7 @@ function ScrollToTop() {
 ========================================================= */
 
 export default function Home() {
+  const { t } = useTranslation();
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   }, []);
@@ -328,7 +330,7 @@ export default function Home() {
                       : 'text-red-700 dark:text-red-400'
                   }`}
                 >
-                  {connected ? 'Network available' : 'Network unavailable'}
+                  {connected ? t('home.networkOn') : t('home.networkOff')}
                 </span>
               </div>
 
@@ -342,12 +344,12 @@ export default function Home() {
                       strokeWidth={0}
                     />
                   ))}
-                  <span className="ml-1.5">No sign-up required</span>
+                  <span className="ml-1.5">{t('home.noSignup')}</span>
                 </div>
                 <span className="hidden h-3 w-px bg-slate-200 dark:bg-white/[0.07] sm:block" />
                 <div className="flex items-center gap-1.5">
                   <ShieldCheck className="h-3 w-3 text-emerald-500" strokeWidth={2.4} />
-                  End-to-end encrypted
+                  {t('home.e2e')}
                 </div>
               </div>
 
@@ -362,9 +364,7 @@ export default function Home() {
               </h1>
 
               <p className="mt-5 max-w-[520px] text-[13.5px] leading-6 text-slate-600 dark:text-slate-400 sm:text-[15px] sm:leading-7">
-                Send files of any size directly between devices, right from
-                your browser. WebDrop connects the two devices with WebRTC, so
-                your files never pass through or sit on our servers.
+                {t('home.heroBody')}
               </p>
 
               {/* Actions */}
@@ -376,7 +376,7 @@ export default function Home() {
                   className={`group inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-[13px] font-semibold text-white shadow-lg shadow-violet-600/20 transition-colors duration-200 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
                   <Radio className="h-4 w-4" strokeWidth={2.2} />
-                  {creating ? 'Creating…' : 'Create secure room'}
+                  {creating ? t('home.creating') : t('home.createRoom')}
                   <ArrowRight
                     className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
                     strokeWidth={2.5}
@@ -389,7 +389,7 @@ export default function Home() {
                   className={`inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-[13px] font-semibold text-slate-700 transition-colors duration-200 hover:border-violet-200 hover:bg-slate-50 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:bg-white/[0.06] sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
                   <Cable className="h-4 w-4" strokeWidth={2.2} />
-                  Join with a code
+                  {t('home.joinCode')}
                 </button>
 
                 <DownloadDropdown currentPlatform={currentPlatform} />
@@ -416,7 +416,7 @@ export default function Home() {
 
               <div className="mt-5 flex items-center gap-2 text-[11.5px] text-slate-400 dark:text-slate-500">
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-                Files are transferred directly between connected peers.
+                {t('home.filesDirect')}
               </div>
             </div>
           </section>
@@ -429,10 +429,10 @@ export default function Home() {
                 <div>
                   <p className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-600 dark:text-violet-400">
                     <CircleDot className="h-3 w-3" strokeWidth={2.6} />
-                    Live topology
+                    {t('home.liveTopology')}
                   </p>
                   <h2 className="mt-1 font-heading text-[18px] font-bold tracking-tight text-slate-900 dark:text-white">
-                    Peer radar
+                    {t('home.peerRadar')}
                   </h2>
                 </div>
 
@@ -945,7 +945,7 @@ export default function Home() {
                   className={`group inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-[13px] font-bold text-white shadow-lg shadow-violet-600/25 transition-colors duration-200 hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
                   <Radio className="h-4 w-4" strokeWidth={2.2} />
-                  {creating ? 'Creating…' : 'Create secure room'}
+                  {creating ? t('home.creating') : t('home.createRoom')}
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" strokeWidth={2.5} />
                 </button>
 
@@ -955,7 +955,7 @@ export default function Home() {
                   className={`inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-5 py-3 text-[13px] font-bold text-white transition-colors duration-200 hover:bg-white/[0.1] sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
                 >
                   <Cable className="h-4 w-4" strokeWidth={2.2} />
-                  Join with a code
+                  {t('home.joinCode')}
                 </button>
               </div>
             </div>
@@ -1188,6 +1188,7 @@ function DownloadItem({ item, currentPlatform, menu = false, onStarted }) {
 const CLOSE_MS = 220;
 
 function DownloadDropdown({ currentPlatform }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [shown, setShown] = useState(false);
@@ -1298,7 +1299,7 @@ function DownloadDropdown({ currentPlatform }) {
         className={`inline-flex items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-5 py-3 text-[13px] font-semibold text-violet-700 transition-colors duration-200 hover:bg-violet-100 dark:border-violet-500/20 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20 sm:px-6 sm:py-3.5 sm:text-[14px] ${FOCUS_RING}`}
       >
         <Download className="h-4 w-4" strokeWidth={2.2} />
-        Download app
+        {t('home.downloadApp')}
         <ChevronDown
           className={`h-4 w-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
           strokeWidth={2.4}
@@ -1320,7 +1321,7 @@ function DownloadDropdown({ currentPlatform }) {
               <div
                 ref={panelRef}
                 role="menu"
-                aria-label="Download app"
+                aria-label={t('home.downloadApp')}
                 className={`absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-slate-200 bg-white px-4 pt-3 shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none dark:border-white/[0.06] dark:bg-white/[0.02] ${
                   shown ? 'translate-y-0' : 'translate-y-full'
                 }`}
@@ -1365,7 +1366,7 @@ function DownloadDropdown({ currentPlatform }) {
             <div
               ref={panelRef}
               role="menu"
-              aria-label="Download app"
+              aria-label={t('home.downloadApp')}
               style={{ top: pos.top, left: pos.left, width: pos.width }}
               className={`fixed z-[100] max-h-[70vh] origin-top-left overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl transition duration-200 ease-out motion-reduce:transition-none dark:border-white/[0.06] dark:bg-white/[0.02] ${
                 shown

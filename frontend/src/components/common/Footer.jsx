@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   ArrowUpRight,
   Github,
@@ -25,6 +26,7 @@ import { toast } from './ToastContainer';
 const REPO_URL = 'https://github.com/Suraj1819/web-drop';
 
 export default function Footer() {
+  const { t } = useTranslation();
   const year = new Date().getFullYear();
   const { navLocked } = useRoom();
   const location = useLocation();
@@ -36,8 +38,8 @@ export default function Footer() {
     e.preventDefault();
 
     toast.warning(
-      'Leave the room first',
-      'Finish or cancel your transfer before navigating away.'
+      t('footer.leaveRoom'),
+      t('footer.leaveRoomBody')
     );
   };
 
@@ -51,8 +53,8 @@ export default function Footer() {
       if (navLocked) {
         e.preventDefault();
         toast.warning(
-          'Leave the room first',
-          'Finish or cancel your transfer before navigating away.'
+          t('footer.leaveRoom'),
+          t('footer.leaveRoomBody')
         );
         return;
       }
@@ -65,7 +67,7 @@ export default function Footer() {
         navigate('/');
       }
     },
-    [location.pathname, navigate, navLocked]
+    [location.pathname, navigate, navLocked, t]
   );
 
   const navClass = `
@@ -113,7 +115,7 @@ export default function Footer() {
             <Link
               to="/"
               onClick={handleLogoClick}
-              aria-label="WebDrop home — scroll to top"
+              aria-label={t('footer.homeAria')}
               aria-disabled={navLocked || undefined}
               tabIndex={navLocked ? -1 : undefined}
               className={`group inline-flex items-center gap-3 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 ${
@@ -145,27 +147,25 @@ export default function Footer() {
                   WebDrop
                 </p>
                 <p className="mt-1 text-[10px] font-medium tracking-wide text-slate-400 dark:text-slate-500">
-                  Drop · Connect · Transfer
+                  {t('footer.tagline')}
                 </p>
               </div>
             </Link>
 
             <p className="mt-5 max-w-[340px] text-[12px] leading-6 text-slate-500 dark:text-slate-400">
-              A browser-based peer-to-peer file transfer platform that lets
-              devices connect directly and transfer files without central
-              file storage.
+              {t('footer.desc')}
             </p>
 
             {/* Trust badges */}
             <div className="mt-5 flex flex-wrap gap-2">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-[10px] font-bold text-emerald-700 dark:border-emerald-500/15 dark:bg-emerald-500/[0.07] dark:text-emerald-400">
                 <ShieldCheck className="h-3.5 w-3.5" strokeWidth={2.4} />
-                Peer-to-peer
+                {t('footer.peerToPeer')}
               </span>
 
               <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200/80 bg-violet-50 px-3 py-1.5 text-[10px] font-bold text-violet-700 dark:border-violet-500/15 dark:bg-violet-500/[0.07] dark:text-violet-400">
                 <Lock className="h-3.5 w-3.5" strokeWidth={2.4} />
-                No storage
+                {t('footer.noStorage')}
               </span>
             </div>
           </div>
@@ -178,7 +178,7 @@ export default function Footer() {
               className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
               style={{ letterSpacing: '0.18em' }}
             >
-              Product
+              {t('footer.product')}
             </p>
 
             <div className="mt-5 flex flex-col items-start gap-3.5">
@@ -190,7 +190,7 @@ export default function Footer() {
                 className={navClass}
               >
                 <CircleDot className="h-3 w-3" strokeWidth={2.4} />
-                Overview
+                {t('footer.overview')}
               </Link>
 
               <Link
@@ -201,7 +201,7 @@ export default function Footer() {
                 className={navClass}
               >
                 <Zap className="h-3 w-3" strokeWidth={2.4} />
-                Create room
+                {t('footer.create')}
               </Link>
 
               <Link
@@ -212,7 +212,7 @@ export default function Footer() {
                 className={navClass}
               >
                 <ArrowUpRight className="h-3 w-3" strokeWidth={2.4} />
-                Join room
+                {t('footer.join')}
               </Link>
 
               <Link
@@ -223,7 +223,7 @@ export default function Footer() {
                 className={navClass}
               >
                 <Info className="h-3.5 w-3.5" strokeWidth={2.2} />
-                About WebDrop
+                {t('footer.about')}
               </Link>
             </div>
           </div>
@@ -236,7 +236,7 @@ export default function Footer() {
               className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
               style={{ letterSpacing: '0.18em' }}
             >
-              Project
+              {t('footer.project')}
             </p>
 
             <div className="mt-5 flex flex-col items-start gap-3.5">
@@ -248,7 +248,7 @@ export default function Footer() {
                 className={navClass}
               >
                 <Users className="h-3.5 w-3.5" strokeWidth={2.2} />
-                <span>Meet the team</span>
+                <span>{t('footer.team')}</span>
                 {!navLocked && (
                   <ArrowUpRight
                     className="h-3 w-3 opacity-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100"
@@ -267,7 +267,7 @@ export default function Footer() {
                 className={navClass}
               >
                 <Github className="h-3.5 w-3.5" strokeWidth={2.2} />
-                <span>Source code</span>
+                <span>{t('footer.source')}</span>
                 {!navLocked && (
                   <ArrowUpRight
                     className="h-3 w-3 opacity-0 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:opacity-100"
@@ -294,7 +294,7 @@ export default function Footer() {
               className="text-[10px] font-bold uppercase text-slate-400 dark:text-slate-500"
               style={{ letterSpacing: '0.18em' }}
             >
-              Status
+              {t('footer.status')}
             </p>
 
             {/* Connection card */}
@@ -306,12 +306,11 @@ export default function Footer() {
 
                 <div className="min-w-0">
                   <p className="text-[12px] font-bold text-slate-800 dark:text-slate-200">
-                    Direct peer transfer
+                    {t('footer.directTransfer')}
                   </p>
 
                   <p className="mt-1 text-[10px] leading-5 text-slate-500 dark:text-slate-400">
-                    Signaling helps devices connect. File data travels
-                    directly between peers.
+                    {t('footer.directBody')}
                   </p>
                 </div>
               </div>
@@ -339,11 +338,11 @@ export default function Footer() {
 
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400">
-                    Room navigation locked
+                    {t('footer.navLocked')}
                   </p>
 
                   <p className="mt-0.5 text-[9px] leading-relaxed text-amber-600/80 dark:text-amber-400/70">
-                    Finish the current transfer to navigate.
+                    {t('footer.navLockedBody')}
                   </p>
                 </div>
               </div>
@@ -363,16 +362,16 @@ export default function Footer() {
           {/* Copyright */}
           <div className="flex flex-col gap-1">
             <p className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-              © {year} WebDrop. Crafted with
+              © {year} WebDrop. {t('footer.crafted')}
               <Heart
                 className="h-3 w-3 fill-rose-500 text-rose-500"
                 strokeWidth={2}
               />
-              for the web.
+              {t('footer.forWeb')}
             </p>
 
             <p className="text-[9px] font-medium text-slate-400 dark:text-slate-600">
-              Built as a Computer Science &amp; Engineering project.
+              {t('footer.projectNote')}
             </p>
           </div>
 
@@ -380,7 +379,7 @@ export default function Footer() {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-emerald-200/80 dark:bg-emerald-500/[0.07] dark:text-emerald-400 dark:ring-emerald-500/15">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Online
+              {t('footer.online')}
             </span>
 
             <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
@@ -403,7 +402,7 @@ export default function Footer() {
 
             <span className="inline-flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">
               <Globe className="h-3 w-3" strokeWidth={2.4} />
-              Worldwide
+              {t('footer.worldwide')}
             </span>
           </div>
         </div>

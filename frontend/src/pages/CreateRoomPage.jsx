@@ -1,6 +1,7 @@
 // src/pages/CreateRoom.jsx
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   ArrowLeft,
@@ -50,57 +51,25 @@ import { toast } from '../components/common/ToastContainer';
 const FOCUS_RING =
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-surface';
 
-const CAPABILITIES = [
-  {
-    icon: ShieldCheck,
-    title: 'End-to-end encrypted',
-    desc: 'Every byte travels over an encrypted WebRTC DataChannel.',
-    tone: 'emerald',
-  },
-  {
-    icon: Zap,
-    title: 'Direct peer-to-peer',
-    desc: 'No upload step. Files go straight between devices.',
-    tone: 'violet',
-  },
-  {
-    icon: Clock,
-    title: 'Auto-expires',
-    desc: 'Rooms self-destruct after 30 minutes of activity.',
-    tone: 'amber',
-  },
-  {
-    icon: Users,
-    title: 'Two devices only',
-    desc: 'One sender, one receiver. No third party can join.',
-    tone: 'sky',
-  },
+const CAPABILITY_KEYS = [
+  { icon: ShieldCheck, titleKey: 'create.capE2eTitle', descKey: 'create.capE2eDesc', tone: 'emerald' },
+  { icon: Zap, titleKey: 'create.capP2pTitle', descKey: 'create.capP2pDesc', tone: 'violet' },
+  { icon: Clock, titleKey: 'create.capExpireTitle', descKey: 'create.capExpireDesc', tone: 'amber' },
+  { icon: Users, titleKey: 'create.capTwoTitle', descKey: 'create.capTwoDesc', tone: 'sky' },
 ];
 
-const SPECS = [
-  { label: 'Transport', value: 'WebRTC · DTLS', icon: Server },
-  { label: 'Signaling', value: 'Socket.IO', icon: Wifi },
-  { label: 'Auth', value: 'None required', icon: KeyRound },
-  { label: 'Storage', value: 'Zero on server', icon: FileCheck },
+const SPEC_KEYS = [
+  { labelKey: 'create.specTransport', value: 'WebRTC · DTLS', icon: Server },
+  { labelKey: 'create.specSignaling', value: 'Socket.IO', icon: Wifi },
+  { labelKey: 'create.specAuth', valueKey: 'create.specAuthValue', icon: KeyRound },
+  { labelKey: 'create.specStorage', valueKey: 'create.specStorageValue', icon: FileCheck },
 ];
 
-const FAQS = [
-  {
-    q: 'Do both devices need the same Wi-Fi?',
-    a: 'No. WebDrop finds the fastest route between devices — same network or different ones.',
-  },
-  {
-    q: 'Is there a file size limit?',
-    a: 'Not from us. Large files are chunked and streamed. The only real limit is disk space and connection.',
-  },
-  {
-    q: 'What if I lose connection?',
-    a: 'Active transfers pause and resume automatically when the other device reconnects.',
-  },
-  {
-    q: 'Can someone else guess my room?',
-    a: 'Codes are single-use, 5 characters, and expire in 30 minutes. Practically impossible to guess in time.',
-  },
+const FAQ_KEYS = [
+  { qKey: 'create.faq1q', aKey: 'create.faq1a' },
+  { qKey: 'create.faq2q', aKey: 'create.faq2a' },
+  { qKey: 'create.faq3q', aKey: 'create.faq3a' },
+  { qKey: 'create.faq4q', aKey: 'create.faq4a' },
 ];
 
 /* ============================================================
@@ -156,8 +125,10 @@ async function copyToClipboard(text) {
    SMALL COMPONENTS
 ============================================================ */
 
-function InlineCopy({ value, label = 'Copy', variant = 'default', className = '' }) {
+function InlineCopy({ value, label, variant = 'default', className = '' }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const displayLabel = label || t('create.copy');
 
   const handleCopy = async () => {
     const ok = await copyToClipboard(value);
@@ -165,7 +136,7 @@ function InlineCopy({ value, label = 'Copy', variant = 'default', className = ''
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } else {
-      toast.error('Copy failed', 'Please copy manually.');
+      toast.error(t('create.toastCopyFailed'), t('create.toastCopyManually'));
     }
   };
 
@@ -179,17 +150,17 @@ function InlineCopy({ value, label = 'Copy', variant = 'default', className = ''
       type="button"
       onClick={handleCopy}
       className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold transition-colors sm:px-3 sm:text-[12px] ${baseStyles} ${FOCUS_RING} ${className}`}
-      aria-label={copied ? 'Copied' : label}
+      aria-label={copied ? t('create.copied') : displayLabel}
     >
       {copied ? (
         <>
           <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2.6} />
-          <span>Copied</span>
+          <span>{t('create.copied')}</span>
         </>
       ) : (
         <>
           <Copy className="h-3.5 w-3.5" strokeWidth={2.2} />
-          <span>{label}</span>
+          <span>{displayLabel}</span>
         </>
       )}
     </button>
@@ -258,6 +229,7 @@ function ScrollToTop() {
 ============================================================ */
 
 function CreateView({ loading, connected, socket, onGenerate }) {
+  const { t } = useTranslation();
   const isConnected = Boolean(connected && socket?.connected);
 
   return (
@@ -268,21 +240,20 @@ function CreateView({ loading, connected, socket, onGenerate }) {
         <div className="inline-flex items-center gap-2 rounded-full border border-violet-200/80 bg-violet-50/80 px-3 py-1 dark:border-violet-500/20 dark:bg-violet-500/[0.08]">
           <span className="h-1.5 w-1.5 rounded-full bg-violet-500" />
           <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300">
-            New transfer
+            {t('create.badge')}
           </span>
         </div>
 
         {/* Heading */}
         <h1 className="mt-4 font-heading text-[28px] font-extrabold leading-[1.1] tracking-[-0.035em] text-slate-900 dark:text-white xs:text-[32px] sm:text-[42px] lg:text-[48px]">
-          Create a private
+          {t('create.titleLine1')}
           <span className="block bg-gradient-to-r from-violet-600 via-violet-500 to-indigo-600 bg-clip-text text-transparent">
-            transfer room.
+            {t('create.titleLine2')}
           </span>
         </h1>
 
         <p className="mt-4 max-w-[560px] text-[13.5px] leading-6 text-slate-600 dark:text-slate-400 sm:mt-5 sm:text-[14.5px] sm:leading-7">
-          One room connects exactly two devices. When you generate a code,
-          share it — that&apos;s the only key. Files never pass through our servers.
+          {t('create.subtitle')}
         </p>
 
         {/* Primary CTA block */}
@@ -299,12 +270,12 @@ function CreateView({ loading, connected, socket, onGenerate }) {
             </span>
             <div className="min-w-0">
               <p className="text-[13.5px] font-bold text-slate-900 dark:text-white sm:text-[14px]">
-                Generate your room code
+                {t('create.generateTitle')}
               </p>
               <p className="mt-1 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400 sm:text-[12.5px]">
                 {isConnected
-                  ? 'A 5-character code will be created instantly. Room closes itself in 30 minutes.'
-                  : 'Waiting for the server connection before you can create a room.'}
+                  ? t('create.generateReady')
+                  : t('create.generateWaiting')}
               </p>
             </div>
           </div>
@@ -318,16 +289,16 @@ function CreateView({ loading, connected, socket, onGenerate }) {
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.6} />
-                <span>Creating room…</span>
+                <span>{t('create.creating')}</span>
               </>
             ) : !isConnected ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.6} />
-                <span>Connecting…</span>
+                <span>{t('create.connecting')}</span>
               </>
             ) : (
               <>
-                <span>Create room</span>
+                <span>{t('create.createRoom')}</span>
                 <ArrowRight className="h-4 w-4" strokeWidth={2.6} />
               </>
             )}
@@ -342,12 +313,12 @@ function CreateView({ loading, connected, socket, onGenerate }) {
                 }`}
               />
               <span className="text-[12px] font-medium text-slate-500 dark:text-slate-400">
-                {isConnected ? 'Server connected' : 'Connecting to server…'}
+                {isConnected ? t('create.serverConnected') : t('create.connectingServer')}
               </span>
             </div>
             <span className="hidden h-3 w-px bg-slate-200 dark:bg-white/[0.08] sm:block" />
             <span className="text-[12px] text-slate-400 dark:text-slate-500">
-              Signaling only — no file storage
+              {t('create.signalingOnly')}
             </span>
           </div>
 
@@ -359,36 +330,35 @@ function CreateView({ loading, connected, socket, onGenerate }) {
                 strokeWidth={2.4}
               />
               <p className="text-[11.5px] leading-relaxed text-amber-900/80 dark:text-amber-200/80">
-                <strong className="font-semibold">Waiting for connection.</strong>{' '}
-                Room creation will become available once we reach the WebDrop
-                server. This usually takes a few seconds.
+                <strong className="font-semibold">{t('create.waitingConnection')}</strong>{' '}
+                {t('create.waitingConnectionBody')}
               </p>
             </div>
           )}
         </div>
 
-        {/* Capabilities section */}
+        {/* {t('create.capabilities')} section */}
         <div className="mt-8 sm:mt-10">
-          <SectionLabel icon={CircleDot}>Capabilities</SectionLabel>
+          <SectionLabel icon={CircleDot}>{t('create.capabilities')}</SectionLabel>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {CAPABILITIES.map(({ icon: Icon, title, desc, tone }) => {
-              const t = ToneStyles(tone);
+            {CAPABILITY_KEYS.map(({ icon: Icon, titleKey, descKey, tone }) => {
+              const tones = ToneStyles(tone);
               return (
                 <div
-                  key={title}
+                  key={titleKey}
                   className="rounded-xl border border-slate-200 bg-white p-3.5 transition-colors hover:border-violet-200 dark:border-white/[0.06] dark:bg-white/[0.02] dark:hover:border-violet-500/30 sm:p-4"
                 >
                   <span
-                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${t.bg} ${t.text}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-lg ${tones.bg} ${tones.text}`}
                   >
                     <Icon className="h-4 w-4" strokeWidth={2.2} />
                   </span>
                   <p className="mt-3 text-[13px] font-bold text-slate-900 dark:text-white">
-                    {title}
+                    {t(titleKey)}
                   </p>
                   <p className="mt-1 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400">
-                    {desc}
+                    {t(descKey)}
                   </p>
                 </div>
               );
@@ -398,14 +368,14 @@ function CreateView({ loading, connected, socket, onGenerate }) {
 
         {/* FAQs */}
         <div className="mt-8 sm:mt-10">
-          <SectionLabel icon={Info}>Common questions</SectionLabel>
+          <SectionLabel icon={Info}>{t('create.commonQuestions')}</SectionLabel>
 
           <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-white/[0.06] dark:bg-white/[0.02]">
-            {FAQS.map(({ q, a }, i) => (
+            {FAQ_KEYS.map(({ qKey, aKey }, i) => (
               <details
-                key={q}
+                key={qKey}
                 className={`group ${
-                  i !== FAQS.length - 1
+                  i !== FAQ_KEYS.length - 1
                     ? 'border-b border-slate-100 dark:border-white/[0.06]'
                     : ''
                 }`}
@@ -413,7 +383,7 @@ function CreateView({ loading, connected, socket, onGenerate }) {
                 <summary
                   className={`flex cursor-pointer list-none items-center justify-between gap-3 px-3.5 py-3 text-[12.5px] font-semibold text-slate-800 transition-colors hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/[0.03] sm:px-4 [&::-webkit-details-marker]:hidden ${FOCUS_RING}`}
                 >
-                  <span className="pr-2">{q}</span>
+                  <span className="pr-2">{t(qKey)}</span>
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition-transform group-open:rotate-45 group-open:border-violet-300 group-open:bg-violet-50 group-open:text-violet-600 dark:border-white/[0.08] dark:text-slate-500 dark:group-open:border-violet-500/30 dark:group-open:bg-violet-500/[0.08] dark:group-open:text-violet-400">
                     <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
                       <path d="M4 1v6M1 4h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -421,7 +391,7 @@ function CreateView({ loading, connected, socket, onGenerate }) {
                   </span>
                 </summary>
                 <p className="px-3.5 pb-3 pr-10 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400 sm:px-4">
-                  {a}
+                  {t(aKey)}
                 </p>
               </details>
             ))}
@@ -432,24 +402,24 @@ function CreateView({ loading, connected, socket, onGenerate }) {
       {/* ============ RIGHT COLUMN (STICKY on lg+) ============ */}
       <aside className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:self-start">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-          <SectionLabel icon={Command}>How it works</SectionLabel>
+          <SectionLabel icon={Command}>{t('create.howItWorks')}</SectionLabel>
 
           <ol className="mt-4 space-y-4">
             {[
-              ['Create a room', 'Get your 5-character code instantly.'],
-              ['Share the code', 'Send it by any channel — text, chat, verbal.'],
-              ['Send files', 'Other device enters the code. Start transferring.'],
-            ].map(([title, sub], i) => (
-              <li key={title} className="flex gap-3">
+              ['create.step1Title', 'create.step1Text'],
+              ['create.step2Title', 'create.step2Text'],
+              ['create.step3Title', 'create.step3Text'],
+            ].map(([titleKey, subKey], i) => (
+              <li key={titleKey} className="flex gap-3">
                 <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-violet-100 text-[11px] font-bold text-violet-700 dark:bg-violet-500/15 dark:text-violet-300">
                   {i + 1}
                 </span>
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-slate-900 dark:text-white">
-                    {title}
+                    {t(titleKey)}
                   </p>
                   <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500 dark:text-slate-400">
-                    {sub}
+                    {t(subKey)}
                   </p>
                 </div>
               </li>
@@ -458,17 +428,17 @@ function CreateView({ loading, connected, socket, onGenerate }) {
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-          <SectionLabel icon={Server}>Technical details</SectionLabel>
+          <SectionLabel icon={Server}>{t('create.techDetails')}</SectionLabel>
 
           <dl className="mt-4 space-y-3">
-            {SPECS.map(({ label, value, icon: Icon }) => (
-              <div key={label} className="flex items-center justify-between gap-3">
+            {SPEC_KEYS.map(({ labelKey, value, valueKey, icon: Icon }) => (
+              <div key={labelKey} className="flex items-center justify-between gap-3">
                 <dt className="flex min-w-0 items-center gap-2 text-[12px] text-slate-500 dark:text-slate-400">
                   <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400 dark:text-slate-500" strokeWidth={2.2} />
-                  <span className="truncate">{label}</span>
+                  <span className="truncate">{t(labelKey)}</span>
                 </dt>
                 <dd className="shrink-0 text-right font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200 sm:text-[11.5px]">
-                  {value}
+                  {valueKey ? t(valueKey) : value}
                 </dd>
               </div>
             ))}
@@ -482,11 +452,10 @@ function CreateView({ loading, connected, socket, onGenerate }) {
             </span>
             <div className="min-w-0">
               <p className="text-[12.5px] font-bold text-emerald-900 dark:text-emerald-200">
-                Private by design
+                {t('create.privateTitle')}
               </p>
               <p className="mt-1 text-[11.5px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
-                Your files bypass our servers completely. We only help the two
-                devices find each other — nothing else.
+                {t('create.privateBody')}
               </p>
             </div>
           </div>
@@ -510,6 +479,7 @@ function ReadyView({
   onNewRoom,
   onCancelRoom,
 }) {
+  const { t } = useTranslation();
   const codeChars = String(roomCode || '').split('');
 
   return (
@@ -521,8 +491,8 @@ function ReadyView({
             type="button"
             onClick={onShare}
             className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:border-violet-300 hover:text-violet-600 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-slate-300 dark:hover:border-violet-500/40 dark:hover:text-violet-300 ${FOCUS_RING}`}
-            aria-label="Share link"
-            title="Share link"
+            aria-label={t('create.shareLink')}
+            title={t('create.shareLink')}
           >
             <Share2 className="h-4 w-4" strokeWidth={2.2} />
           </button>
@@ -533,7 +503,7 @@ function ReadyView({
             className={`inline-flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 px-3 text-[13px] font-bold text-white shadow-lg shadow-violet-600/25 transition-colors hover:bg-violet-700 sm:h-12 sm:px-4 sm:text-[14px] ${FOCUS_RING}`}
           >
             <Radio className="h-4 w-4 shrink-0" strokeWidth={2.4} />
-            <span className="truncate">Enter room</span>
+            <span className="truncate">{t('create.enterRoomShort')}</span>
             <ArrowRight className="h-4 w-4 shrink-0" strokeWidth={2.6} />
           </button>
 
@@ -541,7 +511,7 @@ function ReadyView({
             type="button"
             onClick={onCancelRoom}
             className={`inline-flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-red-200 bg-red-50 px-3 text-[12px] font-bold text-red-600 transition-colors hover:border-red-300 hover:bg-red-100 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-400 dark:hover:border-red-500/40 dark:hover:bg-red-500/15 sm:h-12 sm:px-4 sm:text-[13px] ${FOCUS_RING}`}
-            aria-label="Cancel room"
+            aria-label={t('create.cancelRoom')}
           >
             <X className="h-3.5 w-3.5" strokeWidth={2.4} />
             <span className="hidden xs:inline">Cancel</span>
@@ -560,29 +530,28 @@ function ReadyView({
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
             </span>
             <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
-              Room is live
+              {t('create.roomLive')}
             </span>
           </div>
 
           <h1 className="mt-3 font-heading text-[24px] font-extrabold leading-[1.12] tracking-[-0.035em] text-slate-900 dark:text-white sm:mt-4 sm:text-[36px] lg:text-[44px]">
-            Share this code
+            {t('create.shareTitle')}
             <span className="block text-slate-400 dark:text-slate-500">
-              with the other device
+              {t('create.shareSubtitle')}
             </span>
           </h1>
 
           <p className="mt-2 max-w-[520px] text-[13px] leading-6 text-slate-600 dark:text-slate-400 sm:mt-3 sm:text-[14px]">
-            Anyone who enters this code on WebDrop joins your room. It&apos;s
-            single-use, expires in 30 minutes, and only works once.
+            {t('create.shareBody')}
           </p>
 
-          {/* Room code card */}
+          {/* {t('create.roomCode')} card */}
           <div className="mt-4 rounded-2xl border border-violet-200/70 bg-gradient-to-br from-violet-50/80 via-violet-50/40 to-white p-4 dark:border-violet-500/20 dark:from-violet-500/[0.08] dark:via-violet-500/[0.04] dark:to-transparent sm:mt-6 sm:p-6">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-violet-700/70 dark:text-violet-300/70">
-                Room code
+                {t('create.roomCode')}
               </p>
-              <InlineCopy value={roomCode} label="Copy code" variant="primary" />
+              <InlineCopy value={roomCode} label={t('create.copyCode')} variant="primary" />
             </div>
 
             <div className="mt-3 flex w-full items-stretch justify-center gap-1.5 sm:mt-4 sm:gap-2.5 md:gap-3">
@@ -600,17 +569,17 @@ function ReadyView({
             <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] sm:mt-4 sm:gap-x-4">
               <span className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                 <Clock className="h-3 w-3 shrink-0" strokeWidth={2.4} />
-                Expires in 30 min
+                {t('create.expires')}
               </span>
               <span className="hidden h-3 w-px bg-slate-300 dark:bg-white/[0.1] sm:block" />
               <span className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                 <Users className="h-3 w-3 shrink-0" strokeWidth={2.4} />
-                Single-use only
+                {t('create.singleUse')}
               </span>
               <span className="hidden h-3 w-px bg-slate-300 dark:bg-white/[0.1] sm:block" />
               <span className="inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                 <KeyRound className="h-3 w-3 shrink-0" strokeWidth={2.4} />
-                Case-insensitive
+                {t('create.caseInsensitive')}
               </span>
             </div>
           </div>
@@ -623,7 +592,7 @@ function ReadyView({
               className={`inline-flex h-12 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl bg-violet-600 px-6 text-[14px] font-bold text-white shadow-lg shadow-violet-600/20 transition-colors hover:bg-violet-700 ${FOCUS_RING}`}
             >
               <Radio className="h-4 w-4" strokeWidth={2.4} />
-              <span>Enter the room</span>
+              <span>{t('create.enterRoom')}</span>
               <ArrowRight className="h-4 w-4" strokeWidth={2.6} />
             </button>
 
@@ -633,7 +602,7 @@ function ReadyView({
               className={`inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-xl border border-red-200 bg-white px-5 text-[13.5px] font-bold text-red-600 transition-colors hover:border-red-300 hover:bg-red-50 dark:border-red-500/25 dark:bg-transparent dark:text-red-400 dark:hover:border-red-500/40 dark:hover:bg-red-500/10 ${FOCUS_RING}`}
             >
               <X className="h-4 w-4" strokeWidth={2.4} />
-              <span>Cancel room</span>
+              <span>{t('create.cancelRoom')}</span>
             </button>
           </div>
 
@@ -641,7 +610,7 @@ function ReadyView({
           <div className="my-5 flex items-center gap-3 sm:my-6">
             <div className="h-px flex-1 bg-slate-200 dark:bg-white/[0.06]" />
             <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">
-              Or share a link
+              {t('create.orShareLink')}
             </span>
             <div className="h-px flex-1 bg-slate-200 dark:bg-white/[0.06]" />
           </div>
@@ -654,7 +623,7 @@ function ReadyView({
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                  Direct link
+                  {t('create.directLink')}
                 </p>
                 <p className="mt-0.5 truncate font-mono text-[11px] text-slate-700 dark:text-slate-300 sm:text-[11.5px]">
                   {joinUrl}
@@ -663,7 +632,7 @@ function ReadyView({
             </div>
 
             <div className="mt-3 flex flex-col gap-2 xs:flex-row xs:items-center">
-              <InlineCopy value={joinUrl} label="Copy link" className="w-full xs:flex-1" />
+              <InlineCopy value={joinUrl} label={t('create.copyLink')} className="w-full xs:flex-1" />
               <button
                 type="button"
                 onClick={onOpenJoinLink}
@@ -684,7 +653,7 @@ function ReadyView({
               className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-white/[0.09] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/[0.08] dark:hover:text-violet-300 ${FOCUS_RING}`}
             >
               <Share2 className="h-3.5 w-3.5" strokeWidth={2.2} />
-              Share link
+              {t('create.shareLink')}
             </button>
 
             <button
@@ -693,7 +662,7 @@ function ReadyView({
               className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-[13px] font-semibold text-slate-700 transition-colors hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-white/[0.09] dark:bg-white/[0.03] dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/[0.08] dark:hover:text-violet-300 ${FOCUS_RING}`}
             >
               <RefreshCw className="h-3.5 w-3.5" strokeWidth={2.2} />
-              New room
+              {t('create.newRoom')}
             </button>
           </div>
 
@@ -704,7 +673,7 @@ function ReadyView({
             className={`mt-3 hidden items-center gap-1.5 text-[12px] font-medium text-slate-400 transition-colors hover:text-red-500 dark:text-slate-500 dark:hover:text-red-400 md:inline-flex lg:hidden ${FOCUS_RING}`}
           >
             <X className="h-3 w-3" strokeWidth={2.4} />
-            Cancel this room
+            {t('create.cancelThisRoom')}
           </button>
 
           <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-amber-200/70 bg-amber-50/60 p-3 dark:border-amber-500/15 dark:bg-amber-500/[0.06] sm:p-3.5">
@@ -713,19 +682,16 @@ function ReadyView({
               strokeWidth={2.4}
             />
             <p className="text-[11.5px] leading-relaxed text-amber-900/80 dark:text-amber-200/80">
-              <strong className="font-semibold">Keep this tab open.</strong> The
-              room is tied to this session — closing the tab ends the transfer
-              for both devices.
+              <strong className="font-semibold">{t('create.keepTab')}</strong> {t('create.keepTabBody')}
             </p>
           </div>
 
           {/* Mobile-only side cards */}
           <div className="mt-6 space-y-4 lg:hidden">
             <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-5">
-              <SectionLabel icon={Smartphone}>Scan to join</SectionLabel>
+              <SectionLabel icon={Smartphone}>{t('create.scanToJoin')}</SectionLabel>
               <p className="mt-2 text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
-                Point your phone&apos;s camera at this QR. It opens the join page
-                instantly.
+                {t('create.scanBody')}
               </p>
               <div className="mt-3 flex justify-center rounded-xl border border-slate-100 bg-white p-3 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-4">
                 <QRCodeSVG
@@ -738,25 +704,25 @@ function ReadyView({
               </div>
               <div className="mt-3 flex items-center justify-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
                 <Download className="h-3 w-3" strokeWidth={2.4} />
-                Works with any scanner app
+                {t('create.scannerWorks')}
               </div>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-5">
-              <SectionLabel icon={Users}>What receiver does</SectionLabel>
+              <SectionLabel icon={Users}>{t('create.receiverDoes')}</SectionLabel>
               <ol className="mt-3 space-y-2.5">
                 {[
-                  'Opens WebDrop',
-                  'Clicks "Join room"',
-                  'Enters this code',
-                  'Selects files to send back',
-                ].map((step, i) => (
-                  <li key={step} className="flex items-center gap-3">
+                  'create.receiver1',
+                  'create.receiver2',
+                  'create.receiver3',
+                  'create.receiver4',
+                ].map((stepKey, i) => (
+                  <li key={stepKey} className="flex items-center gap-3">
                     <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-mono text-[10px] font-bold text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
                       {i + 1}
                     </span>
                     <span className="text-[12px] text-slate-600 dark:text-slate-300">
-                      {step}
+                      {t(stepKey)}
                     </span>
                   </li>
                 ))}
@@ -770,7 +736,7 @@ function ReadyView({
                 </span>
                 <div className="min-w-0">
                   <p className="text-[12.5px] font-bold text-emerald-900 dark:text-emerald-200">
-                    Encrypted end-to-end
+                    {t('create.encryptedTitle')}
                   </p>
                   <p className="mt-1 text-[11.5px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
                     Your files are transferred over an encrypted DTLS channel.
@@ -785,7 +751,7 @@ function ReadyView({
         {/* ============ RIGHT COLUMN (desktop) ============ */}
         <aside className="hidden min-w-0 space-y-4 lg:sticky lg:top-24 lg:block lg:self-start">
           <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-            <SectionLabel icon={Smartphone}>Scan to join</SectionLabel>
+            <SectionLabel icon={Smartphone}>{t('create.scanToJoin')}</SectionLabel>
             <p className="mt-3 text-[12.5px] leading-relaxed text-slate-500 dark:text-slate-400">
               Point your phone&apos;s camera at this QR. It opens the join page
               instantly.
@@ -795,25 +761,25 @@ function ReadyView({
             </div>
             <div className="mt-4 flex items-center justify-center gap-2 text-[11px] text-slate-400 dark:text-slate-500">
               <Download className="h-3 w-3" strokeWidth={2.4} />
-              Works with any scanner app
+              {t('create.scannerWorks')}
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/[0.06] dark:bg-white/[0.02] sm:p-6">
-            <SectionLabel icon={Users}>What receiver does</SectionLabel>
+            <SectionLabel icon={Users}>{t('create.receiverDoes')}</SectionLabel>
             <ol className="mt-4 space-y-3">
               {[
-                'Opens WebDrop',
-                'Clicks "Join room"',
-                'Enters this code',
-                'Selects files to send back',
-              ].map((step, i) => (
-                <li key={step} className="flex items-center gap-3">
+                'create.receiver1',
+                'create.receiver2',
+                'create.receiver3',
+                'create.receiver4',
+              ].map((stepKey, i) => (
+                <li key={stepKey} className="flex items-center gap-3">
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 font-mono text-[10px] font-bold text-slate-500 dark:bg-white/[0.06] dark:text-slate-400">
                     {i + 1}
                   </span>
                   <span className="text-[12px] text-slate-600 dark:text-slate-300">
-                    {step}
+                    {t(stepKey)}
                   </span>
                 </li>
               ))}
@@ -827,11 +793,10 @@ function ReadyView({
               </span>
               <div>
                 <p className="text-[12.5px] font-bold text-emerald-900 dark:text-emerald-200">
-                  Encrypted end-to-end
+                  {t('create.encryptedTitle')}
                 </p>
                 <p className="mt-1 text-[11.5px] leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
-                  Your files are transferred over an encrypted DTLS channel.
-                  Nothing is readable by our servers.
+                  {t('create.encryptedBody')}
                 </p>
               </div>
             </div>
@@ -847,6 +812,7 @@ function ReadyView({
 ============================================================ */
 
 export default function CreateRoomPage() {
+  const { t } = useTranslation();
   const [roomCode, setRoomCode] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -883,8 +849,8 @@ export default function CreateRoomPage() {
       if (!code) {
         setLoading(false);
         toast.error(
-          'Room creation failed',
-          'The server did not return a room code.'
+          t('create.toastRoomFailed'),
+          t('create.toastNoCode')
         );
         return;
       }
@@ -902,9 +868,9 @@ export default function CreateRoomPage() {
           saveHostToken(code, hostToken);
         }
 
-        addRecentRoom(code, 'host');
+        addRecentRoom({ roomCode: code, role: 'host', joinedAt: Date.now() });
 
-        toast.success('Room created', `Room ${code} is ready.`);
+        toast.success(t('create.toastRoomCreated'), t('create.toastRoomReady', { code }));
 
         window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
       }, 300);
@@ -918,8 +884,8 @@ export default function CreateRoomPage() {
   const handleGenerate = () => {
     if (!socket || !connected || !socket.connected) {
       toast.error(
-        'Server not connected',
-        'Please wait for the WebDrop server connection.'
+        t('create.toastServerOffline'),
+        t('create.toastServerOfflineBody')
       );
       return;
     }
@@ -932,7 +898,7 @@ export default function CreateRoomPage() {
     window.setTimeout(() => {
       setLoading((current) => {
         if (!current) return current;
-        toast.error('No response', 'The backend did not respond in time.');
+        toast.error(t('create.toastNoResponse'), t('create.toastNoResponseBody'));
         return false;
       });
     }, 8000);
@@ -958,14 +924,14 @@ export default function CreateRoomPage() {
   ============================================================ */
   const handleShare = async () => {
     if (!joinUrl || !roomCode) {
-      toast.error('Nothing to share', 'Please wait for the room code.');
+      toast.error(t('create.toastNothingShare'), t('create.toastWaitCode'));
       return;
     }
 
-    const shareText = `Join my WebDrop room using code ${roomCode}. Room link: ${joinUrl}`;
+    const shareText = t('create.shareText', { code: roomCode, url: joinUrl });
 
     const shareData = {
-      title: 'Join my WebDrop room',
+      title: t('create.shareTitleNative'),
       text: shareText,
       url: joinUrl,
     };
@@ -996,8 +962,8 @@ export default function CreateRoomPage() {
 
     if (ok) {
       toast.success(
-        'Link copied',
-        'Native share not available here — the room link has been copied to your clipboard.'
+        t('create.toastLinkCopied'),
+        t('create.toastLinkCopiedBody')
       );
       return;
     }
@@ -1006,7 +972,7 @@ export default function CreateRoomPage() {
     try {
       window.prompt('Copy this room link:', joinUrl);
     } catch {
-      toast.error('Unable to share', 'Please copy the room link manually.');
+      toast.error(t('create.toastUnableShare'), t('create.toastCopyLinkManually'));
     }
   };
 
@@ -1018,7 +984,7 @@ export default function CreateRoomPage() {
     setLocalRoomCode(null);
     setRole(null);
     setUsers([]);
-    toast.success('Room cancelled', 'The transfer room has been closed.');
+    toast.success(t('create.toastRoomCancelled'), t('create.toastRoomCancelledBody'));
   };
 
   const handleNewRoom = () => {
@@ -1045,7 +1011,7 @@ export default function CreateRoomPage() {
             className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5"
             strokeWidth={2.4}
           />
-          Back to home
+          {t('create.back')}
         </button>
 
         {/* Main content */}
